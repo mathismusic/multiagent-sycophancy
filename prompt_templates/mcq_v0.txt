@@ -1,5 +1,6 @@
-You are to answer a multiple choice question. Choose the best answer from the given options. Output first the letter (A/B/C/D) corresponding to your choice, and then, on a new line, enter your explanation for your choice. Be concise in your explanation.
+You are to answer a multiple choice question. Choose the best answer from the given options.
 {{
     "question": {question_text},
     "choices": {choices_text}
 }}
+Output your answer strictly in JSON format as {{"answer": <selected_choice>, "explanation": <your_explanation>}} where <selected_choice> is the choice (A/B/C/D) you think is correct, and <your_explanation> is a single-line-only explanation of why you chose that answer.

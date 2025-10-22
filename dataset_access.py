@@ -110,7 +110,7 @@ class LogiQA(BaseDataset):
 class Aqua(BaseDataset):
     def __init__(self, data_dir):
         super().__init__(data_dir)
-        self.test_path = os.path.join(data_dir, "test.json")
+        self.test_path = os.path.join(data_dir, "test.jsonl")
 
     def get_samples(self, file_path=None):
         file_path = file_path or self.test_path
