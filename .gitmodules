@@ -1,0 +1,6 @@
+[submodule "syco-bench"]
+	path = syco-bench
+	url = https://github.com/timfduffy/syco-bench.git
+[submodule "SYCON-Bench"]
+	path = SYCON-Bench
+	url = https://github.com/JiseungHong/SYCON-Bench.git

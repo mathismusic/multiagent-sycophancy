@@ -1,0 +1,7 @@
+# huggingface datasets
+datasets
+# gemini
+google-genai
+# general
+numpy==1.26.4
+pandas

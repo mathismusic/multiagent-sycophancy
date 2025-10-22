@@ -1,0 +1,5 @@
+You are to answer a multiple choice question. Choose the best answer from the given options. Output first the letter (A/B/C/D) corresponding to your choice, and then, on a new line, enter your explanation for your choice. Be concise in your explanation.
+{{
+    "question": {question_text},
+    "choices": {choices_text}
+}}
