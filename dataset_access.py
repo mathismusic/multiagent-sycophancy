@@ -45,6 +45,9 @@ class MMLU(BaseDataset):
             gold_idx = letter_to_idx(gold) if isinstance(gold, str) else int(gold)
             items.append(self._build_item(i, q, choices, gold_idx, {"dataset": "mmlu", "subject": row.get("subject")}))
         return items
+    
+    def __str__(self):
+        return f"MMLU ({len(self.dataset)} samples)"
 
 # HellaSwag — commonsense continuation; robust MCQ signal
 # Domain: Commonsense/physical plausibility
@@ -64,6 +67,9 @@ class HellaSwag(BaseDataset):
             gold_idx = int(row["label"])
             items.append(self._build_item(i, q, choices, gold_idx, {"dataset": "hellaswag"}))
         return items
+    
+    def __str__(self):
+        return f"HellaSwag ({len(self.dataset)} samples)"
 
 # ETHICS (commonsense subset) — moral judgments (binary)
 # Domain: Morality / ethics
@@ -82,6 +88,9 @@ class ETHICS(BaseDataset):
             choices = ["unethical", "ethical"]
             items.append(self._build_item(i, q, choices, label, {"dataset": "ethics", "subset": "commonsense"}))
         return items
+    
+    def __str__(self):
+        return f"ETHICS-commonsense ({len(self.dataset)} samples)"
 
 # LogiQA — logical reasoning with 4 options
 # Domain: Critical/logical reasoning (reading + inference)
@@ -101,6 +110,9 @@ class LogiQA(BaseDataset):
             gold_idx = letter_to_idx(gold) if isinstance(gold, str) else int(gold)
             items.append(self._build_item(i, q, choices, gold_idx, {"dataset": "logiqa"}))
         return items
+    
+    def __str__(self):
+        return f"LogiQA ({len(self.dataset)} samples)"
 
 # AQUA-RAT — mathy MCQ with rationale (ignore rationale)
 # Domain: Quantitative / word problems
@@ -122,6 +134,9 @@ class Aqua(BaseDataset):
             gold_idx = letter_to_idx(ex["correct"])
             items.append(self._build_item(i, q, choices, gold_idx, {"dataset": "aqua"}))
         return items
+    
+    def __str__(self):
+        return f"AQUA"
 
 # ECQA — 5-way common-sense QA with explanations
 # Domain: Commonsense QA
@@ -143,6 +158,9 @@ class ECQA(BaseDataset):
             q = row["q_text"]
             items.append(self._build_item(i, q, choices, gold_idx, {"dataset": "ecqa"}))
         return items
+    
+    def __str__(self):
+        return f"ECQA"
 
 # SciQ — science MCQ
 # Domain: Science / facts
@@ -164,6 +182,9 @@ class SciQ(BaseDataset):
             gold_idx = choices.index(ex["correct_answer"])
             items.append(self._build_item(i, q, choices, gold_idx, {"dataset": "sciq"}))
         return items
+    
+    def __str__(self):
+        return f"SciQ"
 
 # LIAR-PLUS — political fact-checking (collapsed to binary)
 # Domain: Politics / claims
@@ -186,6 +207,9 @@ class LIARPlus(BaseDataset):
             choices = ["false", "true"]
             items.append(self._build_item(i, q, choices, gold_idx, {"dataset": "liarplus"}))
         return items
+    
+    def __str__(self):
+        return f"LIAR-PLUS"
 
 # SycophancyEval — agreement-bias focused sets (often 2-choice)
 # Domain: Sycophancy / preference / bias triggers
@@ -206,4 +230,7 @@ class SycophancyEval(BaseDataset):
             gold_idx = int(ex.get("label", 0))
             items.append(self._build_item(i, q, choices, gold_idx, {"dataset": "sycophancyeval"}))
         return items
+    
+    def __str__(self):
+        return f"SycophancyEval"
 
