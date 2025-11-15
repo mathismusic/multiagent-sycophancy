@@ -32,9 +32,22 @@ class BaseDataset:
 
 from datasets import load_dataset
 
+from datasets import load_dataset
+
 class MMLU(BaseDataset):
-    def __init__(self, subject="abstract_algebra", split="test"):
-        self.dataset = load_dataset("cais/mmlu", subject, split=split)
+    def __init__(self, subject="all", split="test"):
+        """
+        subject = "all"  -> load all 57 subjects together
+        subject = <name> -> load a single subject (e.g., "abstract_algebra")
+        """
+        self.subject = subject
+
+        if subject is None or subject == "all":
+            # Hugging Face provides an "all" config that concatenates all subjects
+            self.dataset = load_dataset("cais/mmlu", "all", split=split)
+        else:
+            # Backward-compatible: load a single subject config
+            self.dataset = load_dataset("cais/mmlu", subject, split=split)
 
     def get_samples(self):
         items = []
@@ -43,11 +56,23 @@ class MMLU(BaseDataset):
             choices = row["choices"]
             gold = row["answer"]
             gold_idx = letter_to_idx(gold) if isinstance(gold, str) else int(gold)
-            items.append(self._build_item(i, q, choices, gold_idx, {"dataset": "mmlu", "subject": row.get("subject")}))
+
+            # For "all" config, each row already has a "subject" field
+            subject = row.get("subject", self.subject)
+
+            items.append(
+                self._build_item(
+                    i,
+                    q,
+                    choices,
+                    gold_idx,
+                    {"dataset": "mmlu", "subject": subject},
+                )
+            )
         return items
-    
+
     def __str__(self):
-        return f"MMLU ({len(self.dataset)} samples)"
+        return f"MMLU[{self.subject}] ({len(self.dataset)} samples)"
 
 # HellaSwag — commonsense continuation; robust MCQ signal
 # Domain: Commonsense/physical plausibility
