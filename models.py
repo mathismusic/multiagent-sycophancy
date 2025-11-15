@@ -26,6 +26,9 @@ class Gemini25FlashClient(BaseClient):
         )
         return response.text
     
+    def __str__(self):
+        return "Gemini-2.5-Flash Client"
+    
 class Gemini25ProClient(BaseClient):
     def __init__(self):
         self.client = genai.Client() # export GEMINI_API_KEY in your environment
@@ -37,6 +40,9 @@ class Gemini25ProClient(BaseClient):
         )
         return response.text
     
+    def __str__(self):
+        return "Gemini-2.5-Pro Client"
+    
 class GemmaClient(BaseClient):
     def __init__(self):
         self.client = genai.Client() # export GEMMA_API_KEY in your environment
@@ -47,6 +53,9 @@ class GemmaClient(BaseClient):
             contents=prompt
         )
         return response.text
+    
+    def __str__(self):
+        return "Gemma-1.5 Client"
 
 from openai import OpenAI
 
@@ -65,3 +74,6 @@ class OpenAIClient(BaseClient):
             temperature=0.7,      # Controls randomness (0.0 is very deterministic)
         )
         return response.choices[0].message.content
+    
+    def __str__(self):
+        return "OpenAI GPT-4o-Mini Client"
