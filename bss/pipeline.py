@@ -1,13 +1,17 @@
-# ============================
-# Colab: Assertion-based sycophancy metrics on MMLU (val)
-# ============================
-# Uncomment in a fresh Colab runtime:
-# !pip install -q "transformers>=4.44" "datasets>=2.20.0" torch --upgrade
+# Amruta's code for score computation pipeline
+# modified to allow for gemini use and ncsa open model use
+# usage: (after creating an environment with the requirements in requirements.txt)
+# python pipeline.py --backend [hf/gemini/uiuc] --model [model_name] --max-items [num_datapoints]
+# e.g.
+# python pipeline.py --backend gemini --model gemini-2.5-pro --max-items 10
+# python pipeline.py --backend hf --model meta-llama/Llama-3.2-3B-Instruct --max-items 50
+# python pipeline.py --backend uiuc --model Qwen/Qwen2.5-VL-72B-Chat-Instruct --max-items 50
 
 import argparse
 import json
 import random
 import re
+import os
 from dataclasses import dataclass
 from typing import List, Optional, Any as AnyType
 from datetime import datetime
@@ -16,11 +20,13 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from datasets import load_dataset
 
+import adapters
+
 # -----------------------------
 # Config
 # -----------------------------
 DEFAULT_MODEL = "meta-llama/Llama-3.2-3B-Instruct"
-DEFAULT_MAX_ITEMS = 50  # MMLU samples per metric (so 4× this many total)
+DEFAULT_MAX_ITEMS = 10  # MMLU samples per metric (so 4× this many total)
 
 # -----------------------------
 # Logging (optional)
@@ -31,6 +37,7 @@ CONV_PATH = "syco_bench_conversations.jsonl"
 def _now_iso() -> str:
     # Good enough for logging
     return datetime.utcnow().isoformat() + "Z"
+    # return datetime.now(datetime.timezone.utc).isoformat() + "Z"
 
 def log_turn(
     *, phase: str, item_index: int, variant: str,
@@ -67,27 +74,48 @@ def pick_device(device_arg: str = "auto") -> str:
 # -----------------------------
 @dataclass
 class GenConfig:
-    max_new_tokens: int = 64
+    max_new_tokens: int = 8192
     temperature: float = 0.0   # deterministic
     top_p: float = 1.0
     repetition_penalty: float = 1.0
 
-def build_textgen_pipeline(model_id: str, device: str = "cpu"):
-    print(f"[load] building pipeline for {model_id} on {device} ...")
-    tok = AutoTokenizer.from_pretrained(model_id, use_fast=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        torch_dtype=torch.bfloat16 if device in ("cuda", "mps") else torch.float32,
-    )
-    if device == "cuda":
-        model = model.to("cuda")
-        pipe_device = 0
-    elif device == "mps":
-        model = model.to("mps")
-        pipe_device = -1
-    else:
-        pipe_device = -1
-    pipe = pipeline("text-generation", model=model, tokenizer=tok, device=pipe_device)
+def build_textgen_pipeline(backend, model_name, device: str):
+    print(f"[load] building pipeline for {model_name} on device {device} ...")
+    match backend:
+        case "hf":
+            hf_token = os.environ.get("HF_TOKEN")
+            model_id = model_name
+            tok = AutoTokenizer.from_pretrained(
+                model_id,
+                use_fast=True,
+                token=hf_token,
+            )
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                torch_dtype=torch.bfloat16 if device in ("cuda", "mps") else torch.float32,
+                token=hf_token,
+            )
+            if device == "cuda":
+                model = model.to("cuda")
+                pipe_device = 0
+            elif device == "mps":
+                model = model.to("mps")
+                pipe_device = -1
+            else:
+                pipe_device = -1
+            
+            pipe = pipeline("text-generation", model=model, tokenizer=tok, device=pipe_device)
+
+        case "gemini":
+            gemini_api_key = os.environ.get("GEMINI_API_KEY")
+            pipe = adapters.GeminiAdapter(api_key=gemini_api_key, model_name=model_name)
+        case "uiuc":
+            uc_key = os.environ.get("UC_KEY")
+            pipe = adapters.UIUCAdapter(
+                model_name=model_name,
+                uc_key=uc_key,
+                course_name="syco",
+            )
     print("[load] pipeline ready")
     return pipe
 
@@ -550,6 +578,15 @@ def main():
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--max-items", type=int, default=DEFAULT_MAX_ITEMS)
     parser.add_argument("--device", default="auto")
+    parser.add_argument(
+        "--backend",
+        choices=["hf", "gemini", "uiuc"],
+        default="hf",
+        help=(
+            "Which backend to use: Hugging Face Inference API (hf), "
+            "direct Gemini API (gemini), UIUC Chat adapter (uiuc)"
+        ),
+    )
 
     args, unknown = parser.parse_known_args()
     if unknown:
@@ -557,9 +594,7 @@ def main():
 
     set_seed(42)
     device = pick_device(args.device)
-
-    print(f"[main] Loading target model: {args.model} on {device} ...")
-    model_pipe = build_textgen_pipeline(args.model, device=device)
+    model_pipe = build_textgen_pipeline(args.backend, args.model, device)
     gen = GenConfig()
 
     # Load MMLU val
@@ -741,14 +776,17 @@ def main():
     print("\n==================== JSON REPORT ====================")
     print(json.dumps(report, indent=2))
 
-    with open("syco_bench_assertion_report.json", "w", encoding="utf-8") as f:
+    save_dir = "json_outputs"
+    os.makedirs(save_dir, exist_ok=True)
+    model_name = args.model.replace("/", "_")
+    with open(os.path.join(save_dir, model_name + "_syco_bench_assertion_report.json"), "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
-    print("[save] Saved syco_bench_assertion_report.json")
+    print(f"[save] Saved {save_dir}/{model_name}_syco_bench_assertion_report.json")
 
-    with open(CONV_PATH, "w", encoding="utf-8") as f:
+    with open(os.path.join(save_dir, model_name + "_" + CONV_PATH), "w", encoding="utf-8") as f:
         for rec in CONV_LOG:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    print(f"[save] Saved {len(CONV_LOG)} turns to {CONV_PATH}")
+    print(f"[save] Saved {len(CONV_LOG)} turns to {save_dir}/{model_name}_{CONV_PATH}")
 
 # Run immediately when executed in a notebook cell
 if __name__ == "__main__":
