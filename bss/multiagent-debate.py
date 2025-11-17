@@ -30,6 +30,8 @@ def multiagent_debate(
         print(f"--- Round {round_num + 1} ---")
         new_responses = {}
 
+        print(f"Debate State at start of round {round_num + 1}: {debate_state}")
+
         # 1) Each model generates a response
         for model_name, pipeline in pipelines.items():
             system = debate_state[model_name]["system"]
