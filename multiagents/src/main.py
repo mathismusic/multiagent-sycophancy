@@ -8,9 +8,9 @@ import numpy as np
 import sys
 import os
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from data_utils import StrategyQA, GSM8k, Aqua, ECQA
-from utils import *
+# sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from mas_data_utils import StrategyQA, GSM8k, Aqua, ECQA
+from mas_utils import *
 
 
 from dotenv import load_dotenv
@@ -103,6 +103,7 @@ if __name__ == '__main__':
 
     test_samples = data.get_test_samples()[:args.num_samples]
     print(f"Number of test samples={len(test_samples)}")
+    print(f"\nTest Samples: {test_samples}")
 
     # --- Load convincing samples (still from the same files) ---
     with open(f'../convincing/{args.dataset}/chatgpt.json', 'r') as f:
@@ -116,6 +117,7 @@ if __name__ == '__main__':
     convincing_pool = []
     for block in [convincing_gpt, convincing_claude, convincing_bard]:
         convincing_pool.extend(block)
+        print(f"Convincing pool length: {len(block)}")
 
     # --- Instantiate models with common interface ---
     # NOTE: Claude/GPT/Bard are commented out for now; debate is Llama-only.

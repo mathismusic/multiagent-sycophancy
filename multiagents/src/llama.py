@@ -3,7 +3,7 @@ import torch
 import backoff
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from abstract_model import BaseLLMDebater
-from utils import prepare_context_for_bard, parse_json, invalid_result
+from mas_utils import prepare_context_for_bard, parse_json, invalid_result
 
 
 class LlamaDebater(BaseLLMDebater):

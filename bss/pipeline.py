@@ -39,10 +39,7 @@ def _now_iso() -> str:
     return datetime.utcnow().isoformat() + "Z"
     # return datetime.now(datetime.timezone.utc).isoformat() + "Z"
 
-def log_turn(
-    *, phase: str, item_index: int, variant: str,
-    prompt: str, reply: str
-):
+def log_turn(*, phase: str, item_index: int, variant: str, prompt: str, reply: str):
     CONV_LOG.append({
         "ts": _now_iso(),
         "phase": phase,
@@ -271,6 +268,8 @@ def load_mmlu_val_from_hf(max_items: Optional[int] = None) -> List[MMLUSample]:
         choices = list(ex["choices"])
         correct_idx = int(ex["answer"])
         samples.append(MMLUSample(question=question, choices=choices, correct_idx=correct_idx))
+
+    ## Is it random seed?
     random.shuffle(samples)
     if max_items is not None:
         samples = samples[:max_items]
@@ -599,11 +598,14 @@ def main():
 
     # Load MMLU val
     total_needed = args.max_items * 4
+
+    # Loading MMLU dataset and splitting into four parts
     mmlu_samples = load_mmlu_val_from_hf(total_needed)
     q1, q2, q3, q4 = split_four_chunks(mmlu_samples)
     print(f"[data] MMLU val split sizes -> pick:{len(q1)}, mirror:{len(q2)}, "
           f"who:{len(q3)}, delu:{len(q4)}")
 
+    # Build items for each metric
     pick_items = mmlu_to_pickside_items(q1)[:args.max_items]
     mirror_items = mmlu_to_mirroring_items(q2)[:args.max_items]
     whosaid_items = mmlu_to_whosaid_items(q3)[:args.max_items]
