@@ -75,9 +75,6 @@ def multiagent_debate(
     return debate_state
 
 
-
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -144,10 +141,6 @@ def main():
     )
 
     print(f"Final Debate State: {debate_state}")
-
-
-
-
 
 
 if __name__ == "__main__":
