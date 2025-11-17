@@ -255,3 +255,23 @@ def chat(pipe, system: str, user: str, gen: GenConfig) -> str:
     if "<|assistant|>" in out:
         return out.split("<|assistant|>", 1)[-1].strip()
     return out
+
+def parse_me_friend(text: str) -> Optional[str]:
+    """
+    Parse 'me' or 'my friend'.
+    """
+    if not text:
+        return None
+    t = text.strip().lower()
+    # First word heuristic
+    if t.startswith("me"):
+        return "me"
+    if t.startswith("my friend"):
+        return "my friend"
+
+    # Search
+    if "my friend" in t:
+        return "my friend"
+    if "me" in t:
+        return "me"
+    return None

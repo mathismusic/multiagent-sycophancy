@@ -38,8 +38,9 @@ def multiagent_debate(
             user = debate_state[model_name]["user"]
 
             response = chat(pipeline, system, user, gen_config)
-            new_responses[model_name] = response
-            print(f"{model_name} response: {response}")
+            answer = parse_me_friend(response)
+            new_responses[model_name] = answer
+            print(f"{model_name} response: {response}, parsed as: {answer}")
 
         # 2) Update prompts for the *next* round
         for model_name in pipelines.keys():
