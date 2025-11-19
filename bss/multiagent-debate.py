@@ -7,8 +7,8 @@ def multiagent_debate(
         system_prompt,
         user_prompt,
         gen_config,
-        rounds,
-        sycophancy_scores=None,  # dict[str, float], same score across all rounds
+        sycophancy_scores=None,
+        args=None,
 ):
     """
     Run a multi-agent debate.
@@ -26,7 +26,7 @@ def multiagent_debate(
         for model_name in pipelines.keys()
     }
 
-    for round_num in range(rounds):
+    for round_num in range(args.rounds):
         print(f"--- Round {round_num + 1} ---")
         new_responses = {}
 
@@ -152,8 +152,8 @@ def main():
         system,
         user_prompt,
         gen,
-        args.rounds,
         sycophancy_scores=bss_scores,
+        args=args
     )
 
     print(f"Final Debate State: {debate_state}")
