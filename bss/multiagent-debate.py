@@ -77,6 +77,13 @@ def multiagent_debate(
 
     return debate_state
 
+def load_bss_scores(filepath: str) -> dict[str, float]:
+    """
+    Load BSS scores from a JSON file.
+    """
+    with open(filepath, "r") as f:
+        bss_data = json.load(f)
+    return bss_data
 
 def main():
     parser = argparse.ArgumentParser()
@@ -101,6 +108,11 @@ def main():
     device = pick_device(args.device)
     gen = GenConfig()
     set_seed(gen.seed)
+
+    ###############################################################################
+    # load bss_scores
+    bss_scores = load_bss_scores("bss_scores.json")
+    print(f"BSS Scores: {bss_scores}")
 
     ###############################################################################
     # call build_textgen_pipeline for each selected model
