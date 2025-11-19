@@ -25,6 +25,7 @@ load_dotenv()
 models_map = {"llama3b":"meta-llama/Llama-3.2-3B-Instruct",
               "llama8b":"meta-llama/Llama-3.1-8B-Instruct",
               "llama1b":"meta-llama/Llama-3.2-1B-Instruct",
+              "llama70b":"meta-llama/Llama-3.3-70B-Instruct",
               "gemini2.5pro":"gemini-2.5-pro",
               "qwen72b":"Qwen/Qwen2.5-VL-72B-Chat-Instruct",
               }
@@ -199,7 +200,7 @@ def build_textgen_pipeline(model, device: str):
     model_name = models_map[model]
     print(f"[load] building pipeline for {model_name} on device {device} ...")
 
-    backend = models_to_backends[model]
+    backend = models_to_bapckends[model]
     match backend:
         case "hf":
             # hf_token = os.environ.get("HF_TOKEN")
