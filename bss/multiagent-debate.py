@@ -2,7 +2,7 @@ import argparse
 from utils import *
 from prompt import *
 
-def multiagent_debate(
+def use_bss_scoresmultiagent_debate(
         pipelines,
         system_prompt,
         user_prompt,
@@ -98,7 +98,7 @@ def main():
     parser.add_argument("--rounds", default=5, type=int)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--metric", default="picking_sides")
-    parser.add_argument("--use_bss_scores", default=False)
+    parser.add_argument("--use_bss_scores", action="store_true", default=False)
 
     ###############################################################################
     # Parsing only known args here
