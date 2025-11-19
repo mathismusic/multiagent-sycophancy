@@ -201,7 +201,7 @@ def build_textgen_pipeline(model, device: str):
     model_name = models_map[model]
     print(f"[load] building pipeline for {model_name} on device {device} ...")
 
-    backend = models_to_bapckends[model]
+    backend = models_to_backends[model]
     match backend:
         case "hf":
             # hf_token = os.environ.get("HF_TOKEN")
