@@ -35,6 +35,7 @@ models_to_backends = {"llama3b":"hf",
                       "llama8b":"hf",
                       "llama1b":"hf",
                       "llama70b":"hf",
+                      "llama70b3.1":"hf",
                       "gemini2.5pro":"gemini",
                       "qwen72b":"uiuc",
                       }
