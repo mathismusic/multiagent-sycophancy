@@ -58,7 +58,7 @@ def multiagent_debate(
             )
 
             # Starting from *second* round (round_num == 1), add sycophancy info
-            if args.use_bss_scores and sycophancy_scores is not None and round_num > 1:
+            if args.use_bss_scores and sycophancy_scores is not None and round_num >= 1:
                 # Build lines of "other_model: score"
                 other_scores_lines = []
                 for other_model in pipelines.keys():
