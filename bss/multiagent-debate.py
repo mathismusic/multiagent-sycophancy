@@ -2,7 +2,7 @@ import argparse
 from utils import *
 from prompt import *
 
-def use_bss_scoresmultiagent_debate(
+def multiagent_debate(
         pipelines,
         system_prompt,
         user_prompt,
