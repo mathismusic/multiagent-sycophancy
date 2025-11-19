@@ -33,6 +33,7 @@ models_map = {"llama3b":"meta-llama/Llama-3.2-3B-Instruct",
 models_to_backends = {"llama3b":"hf",
                       "llama8b":"hf",
                       "llama1b":"hf",
+                      "llama70b":"hf",
                       "gemini2.5pro":"gemini",
                       "qwen72b":"uiuc",
                       }
