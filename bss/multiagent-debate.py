@@ -58,7 +58,7 @@ def multiagent_debate(
             )
 
             # Starting from *second* round (round_num == 1), add sycophancy info
-            if sycophancy_scores is not None and round_num == 1:
+            if use_bss_scores and sycophancy_scores is not None and round_num > 1:
                 # Build lines of "other_model: score"
                 other_scores_lines = []
                 for other_model in pipelines.keys():
@@ -94,10 +94,11 @@ def main():
         required=True,
         help="Space-separated list of model names",
     )
-    parser.add_argument("--dataset", default="SQA", type = str)
+    parser.add_argument("--dataset", default="SQA", type=str)
     parser.add_argument("--rounds", default=5, type=int)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--metric", default="picking_sides")
+    parser.add_argument("--use_bss_scores", default=False)
 
     ###############################################################################
     # Parsing only known args here
@@ -152,7 +153,7 @@ def main():
         user_prompt,
         gen,
         args.rounds,
-        sycophancy_scores=None,
+        sycophancy_scores=bss_scores,
     )
 
     print(f"Final Debate State: {debate_state}")
