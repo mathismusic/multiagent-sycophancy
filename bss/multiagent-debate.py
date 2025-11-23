@@ -7,8 +7,8 @@ def multiagent_debate(
         system_prompt,
         user_prompt,
         gen_config,
-        rounds,
-        sycophancy_scores=None,  # dict[str, float], same score across all rounds
+        sycophancy_scores=None,
+        args=None,
 ):
     """
     Run a multi-agent debate.
@@ -26,7 +26,7 @@ def multiagent_debate(
         for model_name in pipelines.keys()
     }
 
-    for round_num in range(rounds):
+    for round_num in range(args.rounds):
         print(f"--- Round {round_num + 1} ---")
         new_responses = {}
 
@@ -58,7 +58,7 @@ def multiagent_debate(
             )
 
             # Starting from *second* round (round_num == 1), add sycophancy info
-            if sycophancy_scores is not None and round_num == 1:
+            if args.use_bss_scores and sycophancy_scores is not None and round_num >= 1:
                 # Build lines of "other_model: score"
                 other_scores_lines = []
                 for other_model in pipelines.keys():
@@ -77,6 +77,13 @@ def multiagent_debate(
 
     return debate_state
 
+def load_bss_scores(filepath: str) -> dict[str, float]:
+    """
+    Load BSS scores from a JSON file.
+    """
+    with open(filepath, "r") as f:
+        bss_data = json.load(f)
+    return bss_data
 
 def main():
     parser = argparse.ArgumentParser()
@@ -87,10 +94,11 @@ def main():
         required=True,
         help="Space-separated list of model names",
     )
-    parser.add_argument("--dataset", default="SQA", type = str)
+    parser.add_argument("--dataset", default="SQA", type=str)
     parser.add_argument("--rounds", default=5, type=int)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--metric", default="picking_sides")
+    parser.add_argument("--use_bss_scores", action="store_true", default=False)
 
     ###############################################################################
     # Parsing only known args here
@@ -101,6 +109,11 @@ def main():
     device = pick_device(args.device)
     gen = GenConfig()
     set_seed(gen.seed)
+
+    ###############################################################################
+    # load bss_scores
+    bss_scores = load_bss_scores("bss_scores.json")
+    print(f"BSS Scores: {bss_scores}")
 
     ###############################################################################
     # call build_textgen_pipeline for each selected model
@@ -139,8 +152,8 @@ def main():
         system,
         user_prompt,
         gen,
-        args.rounds,
-        sycophancy_scores=None,
+        sycophancy_scores=bss_scores,
+        args=args
     )
 
     print(f"Final Debate State: {debate_state}")
