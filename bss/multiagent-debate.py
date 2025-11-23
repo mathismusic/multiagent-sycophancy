@@ -1,6 +1,6 @@
 import argparse
 import json
-from datetime import time
+import time
 
 from utils import *
 from prompt import *
