@@ -1,5 +1,7 @@
 import argparse
 import json
+from datetime import time
+
 from utils import *
 from prompt import *
 
@@ -18,6 +20,9 @@ def multiagent_debate(
     pipelines: dict[model_name -> pipeline]
     sycophancy_scores: optional dict[model_name -> float] (same value each round)
     """
+
+    startTime = time.time()
+
     # Initialize the debate state
     debate_state = {
         model_name: {
@@ -32,6 +37,10 @@ def multiagent_debate(
     debate_log = []
 
     for round_num in range(args.rounds):
+
+        round_start_time = time.time()
+
+
         print(f"--- Round {round_num + 1} ---")
         round_entry = {
             "round": round_num + 1,
@@ -94,8 +103,20 @@ def multiagent_debate(
                     other_responses_block=other_responses
                 )
 
+        round_end_time = time.time()
+        total_round_time = round_end_time - round_start_time
+        round_entry["round_time_seconds"] = total_round_time
+
+
         # Save round log
         debate_log.append(round_entry)
+
+    endTime = time.time()
+    total_debate_time_taken = endTime - startTime
+
+    debate_log.append({
+        "total_debate_time_seconds": total_debate_time_taken
+    })
 
     return debate_state, debate_log
 
@@ -222,6 +243,7 @@ def main():
                         )
 
                 all_prompts.append(user_prompt)
+                conversation_id = f"{metric}_sample{sample_idx}_{user_stance}"
 
                 print(f"\n Final System Prompt: {system}")
                 print(f"\n Final User Prompt: {user_prompt}")
@@ -278,8 +300,7 @@ def main():
                 # Add debate log and final state to logging record
                 logging_record["debate_state"] = debate_state
                 logging_record["debate_log"] = debate_log
-
-                all_logs.append(logging_record)
+                all_logs.append({conversation_id: logging_record})
 
                 print(f"Final Debate State: {debate_state}")
 

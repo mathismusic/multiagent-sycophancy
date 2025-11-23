@@ -1,1 +1,3 @@
 python multiagent-debate.py --model llama1b llama3b
+python multiagent-debate.py --model llama1b llama3b --rounds 3 --no_of_samples 1
+
