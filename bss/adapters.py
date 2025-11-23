@@ -102,14 +102,16 @@ class UIUCAdapter(APIAdapterBase):
                 "content": content.strip()
             })
         payload = {
-            "model": self.model_name,
-            "messages": messages,
-            "api_key": self.api_key,
-            "stream": False,
-            "course_name": self.course_name,
-            "temperature": params.get("temperature", 0.0),
-            "max_new_tokens": params.get("max_new_tokens", 512)
-        }
+        "model": self.model_name,
+        "messages": messages,
+        "api_key": self.api_key,
+        "course_name": self.course_name,
+        "stream": False,
+        "temperature": params.get("temperature", 0.0),
+        "max_tokens": params.get("max_new_tokens", 512),
+        "retrieval_only": False,
+    }
+
         print(headers)
         print(payload)
         resp = requests.post(self.UIUC_CHAT_URL, headers=headers, json=payload, timeout=120)
