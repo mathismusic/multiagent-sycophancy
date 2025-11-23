@@ -1,4 +1,5 @@
 import argparse
+import json
 from utils import *
 from prompt import *
 
@@ -9,6 +10,7 @@ def multiagent_debate(
         gen_config,
         sycophancy_scores=None,
         args=None,
+        metric=None,
 ):
     """
     Run a multi-agent debate.
@@ -26,8 +28,15 @@ def multiagent_debate(
         for model_name in pipelines.keys()
     }
 
+    # FULL LOG FOR EXPORT
+    debate_log = []
+
     for round_num in range(args.rounds):
         print(f"--- Round {round_num + 1} ---")
+        round_entry = {
+            "round": round_num + 1,
+            "per_model": {}
+        }
         new_responses = {}
 
         print(f"Debate State at start of round {round_num + 1}: {debate_state}")
@@ -37,10 +46,28 @@ def multiagent_debate(
             system = debate_state[model_name]["system"]
             user = debate_state[model_name]["user"]
 
-            response = chat(pipeline, system, user, gen_config)
-            answer = parse_me_friend(response)
-            new_responses[model_name] = answer
-            print(f"{model_name} response: {response}, parsed as: {answer}")
+            raw_output = chat(pipeline, system, user, gen_config)
+
+            parsing_func = parsing_metrics_map[metric]
+            parsed_output = parsing_func(raw_output)
+
+            new_responses[model_name] = parsed_output
+            debate_state[model_name]["responses"].append(parsed_output)
+
+            print(f"{model_name} response: {raw_output}, parsed as: {parsed_output}")
+
+            # Record into log
+            round_entry["per_model"][model_name] = {
+                "system_prompt": system,
+                "user_prompt": user,
+                "raw_output": raw_output,
+                "parsed_output": parsed_output,
+            }
+
+            # Include sycophancy scores used this round
+            if args.use_bss_scores and sycophancy_scores is not None:
+                round_entry["per_model"][model_name]["sycophancy_scores"] = sycophancy_scores
+
 
         # 2) Update prompts for the *next* round
         for model_name in pipelines.keys():
@@ -49,33 +76,28 @@ def multiagent_debate(
                 f"{other_model}: {resp}" for other_model, resp in new_responses.items() if other_model != model_name
             )
 
-            debate_state[model_name]["responses"].append(new_responses[model_name])
-
-            # Always append what others just said
-            debate_state[model_name]["user"] += (
-                f"\n\n[Round {round_num + 1} – other agents' responses]\n"
-                f"{other_responses}"
-            )
-
             # Starting from *second* round (round_num == 1), add sycophancy info
             if args.use_bss_scores and sycophancy_scores is not None and round_num >= 1:
                 # Build lines of "other_model: score"
                 other_scores_lines = []
                 for other_model in pipelines.keys():
-                    if other_model == model_name:
-                        continue  # skip self
-                    if other_model not in sycophancy_scores:
-                        continue
-                    score_value = sycophancy_scores[other_model]
-                    other_scores_lines.append(
-                        f"{other_model}: {score_value}"
-                    )
+                    if other_model != model_name and other_model in sycophancy_scores:
+                        other_scores_lines.append(f"{other_model}: {sycophancy_scores[other_model]}")
 
-                if other_scores_lines:
-                    scores_block = "\n".join(other_scores_lines)
-                    debate_state[model_name]["user"] += MMLU_DEBATE_PROMPT_PICKING_SIDES.format(scores_block=scores_block)
+                scores_block = "\n".join(other_scores_lines)
+                debate_state[model_name]["user"] += MMLU[metric.upper()][2].format(
+                    other_responses_block=other_responses,
+                    scores_block=scores_block)
 
-    return debate_state
+            else:
+                debate_state[model_name]["user"] += MMLU[metric.upper()][1].format(
+                    other_responses_block=other_responses
+                )
+
+        # Save round log
+        debate_log.append(round_entry)
+
+    return debate_state, debate_log
 
 def load_bss_scores(filepath: str) -> dict[str, float]:
     """
@@ -94,10 +116,12 @@ def main():
         required=True,
         help="Space-separated list of model names",
     )
-    parser.add_argument("--dataset", default="SQA", type=str)
+    parser.add_argument("--dataset", default="MMLU", type=str)
     parser.add_argument("--rounds", default=5, type=int)
+    parser.add_argument("--no_of_samples", default=10, type=int)
+    parser.add_argument("--dataset_type", default="val", type=str)
     parser.add_argument("--device", default="auto")
-    parser.add_argument("--metric", default="picking_sides")
+    parser.add_argument("--metric", nargs="+", default=["picking_sides", "mirroring", "who_said", "delusion"], type=str)
     parser.add_argument("--use_bss_scores", action="store_true", default=False)
 
     ###############################################################################
@@ -125,38 +149,146 @@ def main():
 
     ###############################################################################
     # load dataset
-    no_of_items = 1
-    mmlu_samples = load_mmlu_from_hf("val", no_of_items)
-    print(f"MMLU_Samples: {mmlu_samples}")
-
-    func = mmlu_metrics_map[args.metric]
-    mmlu_sample_list = func(mmlu_samples)
-
-    print(f"MMLU_Sample_List: {mmlu_sample_list}")
+    # no_of_items = 1
+    mmlu_samples = load_mmlu_from_hf(args.dataset_type, args.no_of_samples)
+    print(f"\nMMLU_Samples: ", len(mmlu_samples))
 
     ###############################################################################
-    #prompts
-    system = MMLU_SYSTEM_PROMPT_INITAL
-    user_prompt = MMLU_USER_PROMPT_PICKING_SIDES_INITIAL.format(
-        question=mmlu_sample_list[0].question,
-        user_answer=mmlu_sample_list[0].correct,
-        friend_answer=mmlu_sample_list[0].wrong,
-    )
-    print(f"System Prompt: {system}")
-    print(f"User Prompt: {user_prompt}")
+    # iterate over each metric in args.metric
 
-    ###############################################################################
-    # Multi-agent debate
-    debate_state = multiagent_debate(
-        pipelines,
-        system,
-        user_prompt,
-        gen,
-        sycophancy_scores=bss_scores,
-        args=args
-    )
+    all_prompts = []
+    all_logs = []
 
-    print(f"Final Debate State: {debate_state}")
+
+    for metric in args.metric:
+        if metric not in mmlu_metrics_map:
+            raise ValueError(f"Unsupported metric: {metric}")
+
+        print(f"\nProcessing metric: {metric}")
+
+        func = mmlu_metrics_map[metric]
+        mmlu_sample_list = func(mmlu_samples)
+
+        print(f"\nMMLU_Sample_List:", len(mmlu_sample_list))
+
+        for sample_idx, sample in enumerate(mmlu_sample_list):
+            print(f"\nProcessing sample: {sample}")
+
+            for user_stance in ["correct", "wrong"]:
+
+                # skip delusion wrong case
+                if metric == "delusion" and user_stance == "wrong":
+                    continue
+
+                ###############################################################################
+                #prompts
+                system = MMLU_SYSTEM_PROMPT_INITAL
+
+                chosen_prompt = metric.upper()
+                print(f"\nChosen Prompt: {chosen_prompt}")
+
+                prompt = MMLU[chosen_prompt]
+                print(f"\nPrompt: {prompt}")
+
+                # write a switch case for metric types
+                user_prompt = ""
+
+                match metric:
+                    case "picking_sides":
+                        user_prompt = prompt[0].format(
+                            question=sample.question,
+                            user_answer=sample.correct if user_stance == "correct" else sample.wrong,
+                            friend_answer=sample.wrong if user_stance == "correct" else sample.correct,
+                        )
+
+                    case "mirroring":
+                        user_prompt = prompt[0].format(
+                            question=sample.question,
+                            belief_answer=sample.correct if user_stance == "correct" else sample.wrong,
+                        )
+
+                    case "who_said":
+                        user_prompt = prompt[0].format(
+                            speaker="I" if user_stance == "correct" else "Someone online",
+                            question=sample.question,
+                            asserted_answer=sample.wrong,
+                        )
+
+                    case "delusion":
+                        user_prompt = prompt[0].format(
+                            question=sample.question,
+                            correct_answer=sample.correct,
+                            delusional_answer=sample.wrong,
+                        )
+
+                all_prompts.append(user_prompt)
+
+                print(f"\n Final System Prompt: {system}")
+                print(f"\n Final User Prompt: {user_prompt}")
+
+                    # ----------------- BUILD METADATA RECORD -----------------
+                # try to capture as much sample metadata as possible
+                sample_meta = {
+                    "question": getattr(sample, "question", None),
+                    "correct": getattr(sample, "correct", None),
+                    "wrong": getattr(sample, "wrong", None),
+                    # add more fields if your sample object has them:
+                    "subject": getattr(sample, "subject", None),
+                    # "id": getattr(sample, "id", None),
+                }
+                logging_record = {
+                    # high-level config
+                    "dataset": args.dataset,
+                    "dataset_type": args.dataset_type,
+                    "metric": metric,
+                    "user_stance": user_stance,
+                    "rounds": args.rounds,
+                    "models": args.model,
+                    "use_bss_scores": args.use_bss_scores,
+
+                    # sample indexing
+                    "sample_index": sample_idx,
+
+                    # prompts
+                    "system_prompt": system,
+                    "prompt_key": chosen_prompt,       # e.g. "PICKING_SIDES"
+                    "prompt_template": prompt[0],      # original template
+                    "user_prompt": user_prompt,
+
+                    # sample metadata
+                    "sample": sample_meta,
+
+                    # sycophancy info (static metadata; debate-state-specific stuff
+                    # would be added after running multiagent_debate)
+                    "bss_scores": bss_scores,
+                }
+
+                ##############################################################################
+                # Multi-agent debate
+                debate_state, debate_log = multiagent_debate(
+                    pipelines,
+                    system,
+                    user_prompt,
+                    gen,
+                    sycophancy_scores=bss_scores,
+                    args=args,
+                    metric = metric,
+                )
+
+                # Add debate log and final state to logging record
+                logging_record["debate_state"] = debate_state
+                logging_record["debate_log"] = debate_log
+
+                all_logs.append(logging_record)
+
+                print(f"Final Debate State: {debate_state}")
+
+    print(f"\nDebated on Total Prompts: {len(all_prompts)}")
+    print(f"\nTotal examples recorded: {len(all_logs)}")
+
+    with open("mmlu_debate_metadata.jsonl", "w") as f:
+        for rec in all_logs:
+            f.write(json.dumps(rec) + "\n")
 
 
 if __name__ == "__main__":
