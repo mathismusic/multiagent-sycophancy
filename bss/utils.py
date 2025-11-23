@@ -26,20 +26,20 @@ models_map = {
     "llama3b": "meta-llama/Llama-3.2-3B-Instruct",
     "llama8b": "meta-llama/Llama-3.1-8B-Instruct",
     "llama1b": "meta-llama/Llama-3.2-1B-Instruct",
-              "llama70b":"meta-llama/Llama-3.3-70B-Instruct",
-              "llama70b3.1":"meta-llama/Llama-3.1-70B",
-    "gemini2.5pro": "gemini-2.5-pro",
-    "qwen72b": "Qwen/Qwen2.5-VL-72B-Instruct",
-    "llama70b": "meta-llama/Llama-3.1-70B",  # <-- add this
+    "qwen3b": "Qwen/Qwen-3B-Instruct",
+    "qwen7b": "Qwen/Qwen-7B-Instruct",
+    "qwen14b": "Qwen/Qwen-14B-Instruct",
 }
 
 
+## weite  
 
 models_to_backends = {"llama3b":"hf",
                       "llama8b":"hf",
                       "llama1b":"hf",
-                      "gemini2.5pro":"gemini",
-                      "qwen72b":"uiuc",
+                        "qwen3b":"hf",
+                        "qwen7b":"hf",
+                        "qwen14b":"hf",
                       }
 
 # -----------------------------
