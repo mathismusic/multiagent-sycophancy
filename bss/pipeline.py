@@ -87,11 +87,18 @@ def build_textgen_pipeline(backend, model_name, device: str):
                 use_fast=True,
                 token=hf_token,
             )
+            # model = AutoModelForCausalLM.from_pretrained(
+            #     model_id,
+            #     torch_dtype=torch.bfloat16 if device in ("cuda", "mps") else torch.float32,
+            #     token=hf_token,
+            # )
+
             model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                torch_dtype=torch.bfloat16 if device in ("cuda", "mps") else torch.float32,
-                token=hf_token,
-            )
+            model_id,
+            torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32,
+            token=hf_token,
+        )
+
             if device == "cuda":
                 model = model.to("cuda")
                 pipe_device = 0

@@ -4,6 +4,7 @@ import time
 
 from utils import *
 from prompt import *
+from response_models import LLMResponse
 
 def multiagent_debate(
         pipelines,
@@ -55,27 +56,39 @@ def multiagent_debate(
             system = debate_state[model_name]["system"]
             user = debate_state[model_name]["user"]
 
+            # 1) Get raw model output
             raw_output = chat(pipeline, system, user, gen_config)
 
+            # 2) Parse according to metric (same as before)
             parsing_func = parsing_metrics_map[metric]
             parsed_output = parsing_func(raw_output)
 
-            new_responses[model_name] = parsed_output
-            debate_state[model_name]["responses"].append(parsed_output)
+            # 3) Wrap + clean + validate via Pydantic
+            response_obj = LLMResponse.from_metric(
+                model_name=model_name,
+                metric=metric,
+                round_index=round_num + 1,
+                system_prompt=system,
+                user_prompt=user,
+                raw_output=raw_output,
+                parsed_output=parsed_output,
+                sycophancy_scores=(
+                    sycophancy_scores if args.use_bss_scores and sycophancy_scores is not None else None
+                ),
+            )
 
-            print(f"{model_name} response: {raw_output}, parsed as: {parsed_output}")
+            # 4) Use the cleaned parsed_output for debate state
+            new_responses[model_name] = response_obj.parsed_output
+            debate_state[model_name]["responses"].append(response_obj.parsed_output)
 
-            # Record into log
-            round_entry["per_model"][model_name] = {
-                "system_prompt": system,
-                "user_prompt": user,
-                "raw_output": raw_output,
-                "parsed_output": parsed_output,
-            }
+            print(
+                f"{model_name} response: {response_obj.raw_output}, "
+                f"parsed as: {response_obj.parsed_output} "
+                f"(valid={response_obj.is_parsed_valid})"
+            )
 
-            # Include sycophancy scores used this round
-            if args.use_bss_scores and sycophancy_scores is not None:
-                round_entry["per_model"][model_name]["sycophancy_scores"] = sycophancy_scores
+            # 5) Log the structured dict instead of a loose dict
+            round_entry["per_model"][model_name] = response_obj.dict()
 
 
         # 2) Update prompts for the *next* round
