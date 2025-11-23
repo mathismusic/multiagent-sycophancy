@@ -22,19 +22,26 @@ load_dotenv()
 # Model configurations
 # -----------------------------
 
-models_map = {"llama3b":"meta-llama/Llama-3.2-3B-Instruct",
-              "llama8b":"meta-llama/Llama-3.1-8B-Instruct",
-              "llama1b":"meta-llama/Llama-3.2-1B-Instruct",
-              "gemini2.5pro":"gemini-2.5-pro",
-              "qwen72b":"Qwen/Qwen2.5-VL-72B-Chat-Instruct",
-              }
+models_map = {
+    "llama3b": "meta-llama/Llama-3.2-3B-Instruct",
+    "llama8b": "meta-llama/Llama-3.1-8B-Instruct",
+    "llama1b": "meta-llama/Llama-3.2-1B-Instruct",
+    "gemini2.5pro": "gemini-2.5-pro",
+    "qwen72b": "Qwen/Qwen2.5-VL-72B-Instruct",
+    "llama70b": "meta-llama/Llama-3.1-70B",  # <-- add this
+}
 
-models_to_backends = {"llama3b":"hf",
-                      "llama8b":"hf",
-                      "llama1b":"hf",
-                      "gemini2.5pro":"gemini",
-                      "qwen72b":"uiuc",
-                      }
+
+
+models_to_backends = {
+    "llama3b": "hf",
+    "llama8b": "hf",
+    "llama1b": "hf",
+    "gemini2.5pro": "gemini",
+    "qwen72b": "uiuc",
+    "llama70b": "hf",  # <-- add this
+}
+
 
 # -----------------------------
 @dataclass
@@ -210,10 +217,17 @@ def build_textgen_pipeline(model, device: str):
                 use_fast=True,
                 token=hf_token,
             )
+            if device == "cuda":
+                dtype = torch.bfloat16
+            elif device == "mps":
+                dtype = torch.float16
+            else:
+                dtype = torch.float32
+
             model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                torch_dtype=torch.bfloat16 if device in ("cuda", "mps") else torch.float32,
-                token=hf_token,
+            model_id,
+            torch_dtype=dtype,
+            token=hf_token,
             )
             if device == "cuda":
                 model = model.to("cuda")
@@ -234,7 +248,7 @@ def build_textgen_pipeline(model, device: str):
             pipe = adapters.UIUCAdapter(
                 model_name=model_name,
                 uc_key=uc_key,
-                course_name="syco",
+                course_name="CS-546",
             )
     print("[load] pipeline ready")
     return pipe
