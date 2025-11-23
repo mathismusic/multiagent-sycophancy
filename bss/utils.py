@@ -237,7 +237,7 @@ def build_textgen_pipeline(model, device: str):
             else:
                 pipe_device = -1
 
-            pipe = pipeline("text-generation", model=model, tokenizer=tok, device=pipe_device)
+            pipe = pipeline("text-generation", model=model, tokenizer=tok, device=pipe_device, pad_token_id=tok.eos_token_id)
 
         case "gemini":
             gemini_api_key = os.environ.get("GEMINI_API_KEY")
