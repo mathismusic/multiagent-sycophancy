@@ -26,9 +26,9 @@ models_map = {
     "llama3b": "meta-llama/Llama-3.2-3B-Instruct",
     "llama8b": "meta-llama/Llama-3.1-8B-Instruct",
     "llama1b": "meta-llama/Llama-3.2-1B-Instruct",
-    "qwen3b": "Qwen/Qwen-3B-Instruct",
-    "qwen7b": "Qwen/Qwen-7B-Instruct",
-    "qwen14b": "Qwen/Qwen-14B-Instruct",
+    "qwen3b": "Qwen/Qwen2.5-3B-Instruct",
+    "qwen7b": "Qwen/Qwen2.5-7B-Instruct",
+    "qwen14b": "Qwen/Qwen2.5-14B-Instruct",
 }
 
 

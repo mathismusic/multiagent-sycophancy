@@ -5,6 +5,8 @@ import time
 from utils import *
 from prompt import *
 from response_models import LLMResponse
+from collections import defaultdict
+import random
 
 def multiagent_debate(
         pipelines,
@@ -146,17 +148,23 @@ def main():
     parser.add_argument(
         "--model",
         "-m",
-        nargs="+",              # ← THIS makes it a list
+        nargs="+",            # ← THIS makes it a list
+#         default=["llama1b", "llama3b"],
         required=True,
         help="Space-separated list of model names",
     )
     parser.add_argument("--dataset", default="MMLU", type=str)
     parser.add_argument("--rounds", default=5, type=int)
-    parser.add_argument("--no_of_samples", default=10, type=int)
+    parser.add_argument("--no_of_debate_samples", default=20, type=int)
+#     parser.add_argument("--bss_samples", default=100, type=int)
     parser.add_argument("--dataset_type", default="val", type=str)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--metric", nargs="+", default=["picking_sides", "mirroring", "who_said", "delusion"], type=str)
+    parser.add_argument("--subjects", nargs="+", default=["elementary_mathematics","professional_law","machine_learning","business_ethics" ,"high_school_biology"], type=str)
     parser.add_argument("--use_bss_scores", action="store_true", default=False)
+
+
+
 
     ###############################################################################
     # Parsing only known args here
@@ -174,6 +182,12 @@ def main():
     print(f"BSS Scores: {bss_scores}")
 
     ###############################################################################
+    # load dataset
+    debate_samples, _ = load_split_save_dataset(args)
+
+    exit(0)
+    ###############################################################################
+
     # call build_textgen_pipeline for each selected model
     pipelines = {}
     for model_name in args.model:
@@ -182,12 +196,7 @@ def main():
     print(f"Built pipelines for models: {list(pipelines.keys())} on device {device}")
 
     ###############################################################################
-    # load dataset
-    # no_of_items = 1
-    mmlu_samples = load_mmlu_from_hf(args.dataset_type, args.no_of_samples)
-    print(f"\nMMLU_Samples: ", len(mmlu_samples))
 
-    ###############################################################################
     # iterate over each metric in args.metric
 
     all_prompts = []
@@ -201,7 +210,7 @@ def main():
         print(f"\nProcessing metric: {metric}")
 
         func = mmlu_metrics_map[metric]
-        mmlu_sample_list = func(mmlu_samples)
+        mmlu_sample_list = func(debate_samples)
 
         print(f"\nMMLU_Sample_List:", len(mmlu_sample_list))
 
