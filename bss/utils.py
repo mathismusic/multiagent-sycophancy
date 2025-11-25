@@ -12,6 +12,8 @@ import torch
 import pandas as pd
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from datasets import load_dataset
+from collections import defaultdict
+import random
 
 import adapters
 from typing import List, Optional, Literal
@@ -383,6 +385,7 @@ parsing_metrics_map = {
     "delusion": parse_correct_incorrect,
 }
 
+## not used
 def mmlu_validation_to_csv(ds, csv_path: str = "mmlu_validation_bss.csv"):
     # Load MMLU "all" config, validation split
 #     dataset = load_dataset("cais/mmlu", "all", split="validation")
@@ -406,6 +409,12 @@ def mmlu_validation_to_csv(ds, csv_path: str = "mmlu_validation_bss.csv"):
     # Save to CSV
     df.to_csv(csv_path, index=False)
     print(f"Saved MMLU validation set to {csv_path}")
+
+def count_by_subject(samples):
+    c = defaultdict(int)
+    for s in samples:
+        c[s.subject] += 1
+    return dict(c)
 
 def mmlu_list_to_csv(samples, csv_path: str = "mmlu_debate_samples.csv"):
     """
@@ -437,3 +446,73 @@ def mmlu_list_to_csv(samples, csv_path: str = "mmlu_debate_samples.csv"):
     df = pd.DataFrame(rows)
     df.to_csv(csv_path, index=False)
     print(f"Saved {len(df)} samples to {csv_path}")
+
+def load_split_save_dataset(args):
+
+    print(f"\nLoading MMLU samples for subjects: {args.subjects}, dataset_type: {args.dataset_type}")
+
+    mmlu_samples = load_mmlu_from_hf(args.subjects, args.dataset_type)
+    print(f"\nLength of MMLU_Samples: ", len(mmlu_samples))
+
+    # Group by subject
+    by_subject = defaultdict(list)
+    for sample in mmlu_samples:
+        by_subject[sample.subject].append(sample)
+
+    print("Counts per subject:")
+    for subj, lst in by_subject.items():
+        print(subj, len(lst))
+
+
+    num_subjects = len(args.subjects)       ## 5 subjects
+
+    # ---------------------------------------------------
+    # How many total samples do YOU want?
+    # ---------------------------------------------------
+    requested_total = args.no_of_debate_samples  # e.g., 20
+    requested_per_subject = requested_total // num_subjects         ## 20/5 = 4
+
+
+    # Max we can actually take per subject (bounded by available data)
+    max_per_subject_possible = min(len(by_subject[subj]) for subj in args.subjects)
+
+    # Final per-subject count we will use (cannot exceed available)
+    per_subject_for_me = min(requested_per_subject, max_per_subject_possible)
+
+
+
+    print(f"\nRequested total: {requested_total}")
+    print(f"Subjects: {num_subjects}")
+    print(f"Requested per subject: {requested_per_subject}")
+    print(f"Max possible per subject (from data): {max_per_subject_possible}")
+    print(f"Using per_subject_for_me = {per_subject_for_me}")
+
+    # ---------------------------------------------------
+    # Build splits: mine vs others
+    # ---------------------------------------------------
+    debate_samples = []
+    bss_samples = []
+
+    for subj in args.subjects:
+        samples_for_subj = by_subject[subj]
+        random.shuffle(samples_for_subj)  # randomize within subject
+
+        # Take first N for you
+        mine_subj = samples_for_subj[:per_subject_for_me]
+        # Everything else from this subject goes to others
+        others_subj = samples_for_subj[per_subject_for_me:]
+
+        debate_samples.extend(mine_subj)
+        bss_samples.extend(others_subj)
+
+    print(f"\nMy samples total: {len(debate_samples)}")
+    print(f"Other samples total: {len(bss_samples)}")
+
+    print("\nMy samples per subject:", count_by_subject(debate_samples))
+    print("Other samples per subject:", count_by_subject(bss_samples))
+
+    print("\nSaving debate and bss samples to CSV...")
+    mmlu_list_to_csv(debate_samples, "mmlu_debate_samples.csv")
+    mmlu_list_to_csv(bss_samples, "mmlu_bss_samples.csv")
+
+    return debate_samples, bss_samples
