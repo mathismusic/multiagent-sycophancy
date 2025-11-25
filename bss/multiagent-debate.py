@@ -185,7 +185,7 @@ def main():
     # load dataset
     debate_samples, _ = load_split_save_dataset(args)
 
-    exit(0)
+    # exit(0)
     ###############################################################################
 
     # call build_textgen_pipeline for each selected model
