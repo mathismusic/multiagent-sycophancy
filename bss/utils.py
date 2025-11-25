@@ -9,6 +9,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 import torch
+import pandas as pd
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from datasets import load_dataset
 
@@ -163,6 +164,7 @@ def mmlu_to_delusion_items(samples: List[MMLUSample]) -> List[DelusionItem]:
 # MMLU loading (validation)
 # -----------------------------
 def load_mmlu_from_hf(
+        subjects,
         split: Literal["train", "test", "val"] = "val",
         max_items: Optional[int] = None,
 ) -> List[MMLUSample]:
@@ -181,7 +183,13 @@ def load_mmlu_from_hf(
     hf_split = hf_split_map[split]  # safe: split is constrained by Literal
 
     print(f"[data] downloading cais/mmlu ('all' / '{hf_split}') from Hugging Face ...")
-    ds = load_dataset("cais/mmlu", "all", split=hf_split)
+    ds_all = load_dataset("cais/mmlu", "all", split=hf_split)
+
+    # Filtering out only relevant samples
+#     ds_all = load_dataset("cais/mmlu", "all", split=hf_split)
+#     subjects = ["abstract_algebra", "anatomy", "machine_learning", "high_school_physics", "us_foreign_policy"]
+
+    ds = ds_all.filter(lambda x: x["subject"] in subjects)
 
     samples: List[MMLUSample] = []
     for ex in ds:
@@ -374,3 +382,58 @@ parsing_metrics_map = {
     "who_said": parse_correct_incorrect,
     "delusion": parse_correct_incorrect,
 }
+
+def mmlu_validation_to_csv(ds, csv_path: str = "mmlu_validation_bss.csv"):
+    # Load MMLU "all" config, validation split
+#     dataset = load_dataset("cais/mmlu", "all", split="validation")
+
+    # Convert to pandas DataFrame
+    df = ds.to_pandas()
+
+    # Get the label names for answers (["A", "B", "C", "D"])
+    answer_labels = dataset.features["answer"].names
+
+    # Map numeric answer (0–3) to letter ("A"–"D")
+    df["answer_letter"] = df["answer"].map(lambda idx: answer_labels[idx])
+
+    # Flatten the "choices" sequence into separate columns: choice_A, choice_B, ...
+    for i, label in enumerate(answer_labels):
+        df[f"choice_{label}"] = df["choices"].apply(lambda opts: opts[i])
+
+    # Optionally drop the original "choices" column if you don't need it
+    df = df.drop(columns=["choices"])
+
+    # Save to CSV
+    df.to_csv(csv_path, index=False)
+    print(f"Saved MMLU validation set to {csv_path}")
+
+def mmlu_list_to_csv(samples, csv_path: str = "mmlu_debate_samples.csv"):
+    """
+    Convert a list of MMLUSample-like objects to a CSV.
+
+    Each sample is expected to have:
+      - question: str
+      - choices: List[str]
+      - correct_idx: int
+      - subject: str
+    """
+    answer_labels = ["A", "B", "C", "D"]  # standard MMLU labels
+
+    rows = []
+    for s in samples:
+        row = {
+            "subject": s.subject,
+            "question": s.question,
+            "answer": s.correct_idx,
+            "answer_letter": answer_labels[s.correct_idx],
+        }
+
+        # choices -> choice_A, choice_B, ...
+        for i, label in enumerate(answer_labels):
+            row[f"choice_{label}"] = s.choices[i] if i < len(s.choices) else None
+
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    df.to_csv(csv_path, index=False)
+    print(f"Saved {len(df)} samples to {csv_path}")
