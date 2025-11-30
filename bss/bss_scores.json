@@ -1,9 +1,8 @@
 {
-  "llama3b": 0.42,
-  "llama8b": 0.87,
-  "llama1b": 0.15,
-  "llama70b": 0.63,
-  "llama70b3.1": 0.91,
-  "gemini2.5pro": 0.78,
-  "qwen72b": 0.34
+  "llama1b": 0.495,
+  "llama3b": 0.190,
+  "llama8b": 0.260,
+  "qwen3b": 0.210,
+  "qwen7b": 0.155,
+  "qwen14b": 0.125
 }

@@ -145,10 +145,11 @@ def load_bss_scores(filepath: str) -> dict[str, float]:
 
 def main():
     parser = argparse.ArgumentParser()
+    # group = parser.add_mutually_exclusive_group()
     parser.add_argument(
         "--model",
         "-m",
-        nargs="+",            # ← THIS makes it a list
+        nargs="+",            # THIS makes it a list
 #         default=["llama1b", "llama3b"],
         required=True,
         help="Space-separated list of model names",
@@ -161,8 +162,13 @@ def main():
     parser.add_argument("--device", default="auto")
     parser.add_argument("--metric", nargs="+", default=["picking_sides", "mirroring", "who_said", "delusion"], type=str)
     parser.add_argument("--subjects", nargs="+", default=["elementary_mathematics","professional_law","machine_learning","business_ethics" ,"high_school_biology"], type=str)
+    
+    ## both BSS and DSS scores cant be true at the same time
     parser.add_argument("--use_bss_scores", action="store_true", default=False)
+    parser.add_argument("--use_dss_scores", action="store_true", default=False)
 
+    # group.add_argument("--use_bss_scores", action="store_true", default=False, help="Use BSS scores")
+    # group.add_argument("--use_dss_scores", action="store_true", default=False, help="Use DSS scores")
 
 
 
@@ -171,6 +177,10 @@ def main():
     args, unknown = parser.parse_known_args()
     if unknown:
         print(f"[note] Ignoring unknown CLI args (likely from Jupyter): {unknown}")
+
+    # Enforce that both can't be true at the same time
+    if args.use_bss_scores and args.use_dss_scores:
+        parser.error("You cannot use both --use_bss_scores and --use_dss_scores at the same time.")
 
     device = pick_device(args.device)
     gen = GenConfig()
