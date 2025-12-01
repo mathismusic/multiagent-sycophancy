@@ -48,6 +48,7 @@ def multiagent_debate(
         model_name: {
             "system": system_prompt,
             "user": user_prompt,
+            "initial_user": user_prompt,  # immutable base prompt with question + stance
             "responses": [],
         }
         for model_name in pipelines.keys()
@@ -146,16 +147,14 @@ def multiagent_debate(
 
         # 2) Update prompts for the *next* round
         for model_name in pipelines.keys():
-            # All *other* models' responses
+            # All *other* models' responses from THIS round
             other_responses = "\n".join(
                 f"{other_model}: {resp}" for other_model, resp in new_responses.items() if other_model != model_name
             )
 
-            # Starting from *second* round (round_num == 1), add sycophancy info
-            if (args.use_bss_scores or args.use_dss_scores) and current_scores is not None and round_num >= 1:
+            base_user = debate_state[model_name]["initial_user"]
 
-                print(f"Current sycophancy scores at round {round_num + 1}: {current_scores}")
-
+            if (args.use_bss_scores or args.use_dss_scores) and current_scores is not None:
                 # Build lines of "other_model: score"
                 other_scores_lines = []
                 for other_model in pipelines.keys():
@@ -164,16 +163,56 @@ def multiagent_debate(
 
                 scores_block = "\n".join(other_scores_lines)
 
+                print(f"Current sycophancy scores at round {round_num + 1}: {current_scores}")
                 print(f"Scores block for {model_name} at round {round_num + 1}:\n{scores_block}")
 
-                debate_state[model_name]["user"] += MMLU[metric.upper()][2].format(
-                    other_responses_block=other_responses,
-                    scores_block=scores_block)
-
-            else:
-                debate_state[model_name]["user"] += MMLU[metric.upper()][1].format(
-                    other_responses_block=other_responses
+                # REPLACE the user prompt with base + one debate block
+                debate_state[model_name]["user"] = (
+                    base_user
+                    + MMLU[metric.upper()][2].format(
+                        other_responses_block=other_responses,
+                        scores_block=scores_block,
+                    )
                 )
+            else:
+                debate_state[model_name]["user"] = (
+                    base_user
+                    + MMLU[metric.upper()][1].format(
+                        other_responses_block=other_responses
+                    )
+                )
+
+
+        # # 2) Update prompts for the *next* round
+        # for model_name in pipelines.keys():
+        #     # All *other* models' responses
+        #     other_responses = "\n".join(
+        #         f"{other_model}: {resp}" for other_model, resp in new_responses.items() if other_model != model_name
+        #     )
+
+        #     # Starting from *second* round (round_num == 1), add sycophancy info
+        #     if (args.use_bss_scores or args.use_dss_scores) and current_scores is not None:
+
+        #         print(f"Current sycophancy scores at round {round_num + 1}: {current_scores}")
+
+        #         # Build lines of "other_model: score"
+        #         other_scores_lines = []
+        #         for other_model in pipelines.keys():
+        #             if other_model != model_name and other_model in current_scores:
+        #                 other_scores_lines.append(f"{other_model}: {current_scores[other_model]:.3f}")
+
+        #         scores_block = "\n".join(other_scores_lines)
+
+        #         print(f"Scores block for {model_name} at round {round_num + 1}:\n{scores_block}")
+
+        #         debate_state[model_name]["user"] += MMLU[metric.upper()][2].format(
+        #             other_responses_block=other_responses,
+        #             scores_block=scores_block)
+
+        #     else:
+        #         debate_state[model_name]["user"] += MMLU[metric.upper()][1].format(
+        #             other_responses_block=other_responses
+        #         )
 
         round_end_time = time.time()
         total_round_time = round_end_time - round_start_time
