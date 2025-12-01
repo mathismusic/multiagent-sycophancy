@@ -55,6 +55,12 @@ def multiagent_debate(
 
     # Working copy of sycophancy scores (so we don't mutate the original dict)
     current_scores = dict(sycophancy_scores) if sycophancy_scores is not None else None
+    
+    # Print initial scores
+    if current_scores is not None:
+        print(f"Initial sycophancy scores: {current_scores}")
+    else:
+        print("No sycophancy scores provided.")
 
     # FULL LOG FOR EXPORT
     debate_log = []
@@ -147,6 +153,9 @@ def multiagent_debate(
 
             # Starting from *second* round (round_num == 1), add sycophancy info
             if (args.use_bss_scores or args.use_dss_scores) and current_scores is not None and round_num >= 1:
+
+                print(f"Current sycophancy scores at round {round_num + 1}: {current_scores}")
+
                 # Build lines of "other_model: score"
                 other_scores_lines = []
                 for other_model in pipelines.keys():
@@ -154,6 +163,9 @@ def multiagent_debate(
                         other_scores_lines.append(f"{other_model}: {current_scores[other_model]:.3f}")
 
                 scores_block = "\n".join(other_scores_lines)
+
+                print(f"Scores block for {model_name} at round {round_num + 1}:\n{scores_block}")
+
                 debate_state[model_name]["user"] += MMLU[metric.upper()][2].format(
                     other_responses_block=other_responses,
                     scores_block=scores_block)
