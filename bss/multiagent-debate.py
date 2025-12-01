@@ -93,6 +93,11 @@ def multiagent_debate(
             system = debate_state[model_name]["system"]
             user = debate_state[model_name]["user"]
 
+            # Print prompts with round no
+            print(f"\n--- {model_name} Round {round_num + 1} ---")
+            print(f"\n{model_name} System Prompt:\n{system}\n")
+            print(f"{model_name} User Prompt:\n{user}\n")
+
             # 1) Get raw model output
             raw_output = chat(pipeline, system, user, gen_config)
 
