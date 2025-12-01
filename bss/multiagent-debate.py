@@ -225,14 +225,14 @@ def main():
         "--model",
         "-m",
         nargs="+",            # THIS makes it a list
-#         default=["llama1b", "llama3b"],
+        # default=["llama1b", "llama3b"],
         required=True,
         help="Space-separated list of model names",
     )
     parser.add_argument("--dataset", default="MMLU", type=str)
     parser.add_argument("--rounds", default=5, type=int)
     parser.add_argument("--no_of_debate_samples", default=20, type=int)
-#     parser.add_argument("--bss_samples", default=100, type=int)
+    # parser.add_argument("--bss_samples", default=100, type=int)
     parser.add_argument("--dataset_type", default="val", type=str)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--metric", nargs="+", default=["picking_sides", "mirroring", "who_said", "delusion"], type=str)
@@ -244,8 +244,6 @@ def main():
 
     # group.add_argument("--use_bss_scores", action="store_true", default=False, help="Use BSS scores")
     # group.add_argument("--use_dss_scores", action="store_true", default=False, help="Use DSS scores")
-
-
 
     ###############################################################################
     # Parsing only known args here
