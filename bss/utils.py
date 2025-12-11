@@ -15,7 +15,7 @@ from datasets import load_dataset
 from collections import defaultdict
 import random
 
-import adapters
+# import adapters
 from typing import List, Optional, Literal
 
 
@@ -513,6 +513,6 @@ def load_split_save_dataset(args):
 
     print("\nSaving debate and bss samples to CSV...")
     mmlu_list_to_csv(debate_samples, "mmlu_debate_samples.csv")
-    mmlu_list_to_csv(bss_samples, "mmlu_bss_samples.csv")
+    # mmlu_list_to_csv(bss_samples, "mmlu_bss_samples.csv")
 
     return debate_samples, bss_samples

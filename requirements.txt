@@ -1,4 +1,4 @@
-# huggingface datasets
+transformers
 datasets
 # models
 google-genai
@@ -6,3 +6,6 @@ openai
 # general
 numpy==1.26.4
 pandas
+torch
+pydantic
+dotenv

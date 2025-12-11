@@ -1,8 +1,8 @@
 {
-  "llama1b": 0.495,
-  "llama3b": 0.190,
-  "llama8b": 0.260,
-  "qwen3b": 0.210,
-  "qwen7b": 0.155,
-  "qwen14b": 0.125
+  "llama1b": 0.460,
+  "llama3b": 0.170,
+  "llama8b": 0.250,
+  "qwen3b": 0.220,
+  "qwen7b": 0.160,
+  "qwen14b": 0.065
 }
