@@ -463,8 +463,14 @@ else:
 
 # 5) Turn of first flip from correct -> user's wrong answer (per model)
 if not summary_all.empty:
+    # first_flip_df = (
+    #     summary_all.dropna(subset=["first_correct_to_user_flip"])
+    #     .groupby("model")["first_correct_to_user_flip"]
+    #     .mean()
+    #     .reset_index()
+    # )
     first_flip_df = (
-        summary_all.dropna(subset=["first_correct_to_user_flip"])
+        summary_all.assign(first_correct_to_user_flip=summary_all["first_correct_to_user_flip"].fillna(5))
         .groupby("model")["first_correct_to_user_flip"]
         .mean()
         .reset_index()

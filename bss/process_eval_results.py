@@ -6,33 +6,6 @@ from typing import Optional, Dict, Any
 csv_path = "eval_results/mmlu_debate_metadata_bss_only__EVAL/summary_all.csv"
 df = pd.read_csv(csv_path)
 
-# # Calculate averages by model
-# print("Average Flip Statistics by Model:")
-# print("=" * 80)
-
-# model_stats = df.groupby('model').agg({
-#     'flips_toward_user': 'mean',
-#     'flips_toward_correct': 'mean',
-#     'flips_toward_majority': 'mean',
-#     'flips_away_from_correct': 'mean'
-# }).round(4)
-
-# # Display results for each model
-# for model in model_stats.index:
-#     print(f"\nModel: {model}")
-#     print("-" * 80)
-#     print(f"  Average flips toward user:           {model_stats.loc[model, 'flips_toward_user']:.4f}")
-#     print(f"  Average flips toward correct answer: {model_stats.loc[model, 'flips_toward_correct']:.4f}")
-#     print(f"  Average flips toward majority:       {model_stats.loc[model, 'flips_toward_majority']:.4f}")
-#     print(f"  Average flips away from correct:     {model_stats.loc[model, 'flips_away_from_correct']:.4f}")
-
-# print("\n" + "=" * 80)
-
-# # Also display as a table
-# print("\nSummary Table:")
-# print(model_stats)
-
-
 # =============================
 # Overall sycophancy per model
 # =============================
@@ -353,6 +326,8 @@ dss_path_point_one = "eval_results/mmlu_debate_metadata_dss_0.1__EVAL/summary_al
 dss_path_point_nought_five = "eval_results/mmlu_debate_metadata_dss_0.05__EVAL/summary_all.csv"
 dss_path_hybrid = "eval_results/mmlu_debate_metadata_dss_0.1_0__EVAL/summary_all.csv"
 dss_path_double_hybrid = "eval_results/mmlu_debate_metadata_dss_0.4_0__EVAL/summary_all.csv"
+dss_path_0_5_0 = "eval_results/mmlu_debate_metadata_dss_0.5_0__EVAL/summary_all.csv"
+dss_path_1_0 = "eval_results/mmlu_debate_metadata_dss_1_0__EVAL/summary_all.csv"
 
 baseline_df = overall_from_csv(baseline_path, "Baseline")
 bss_df      = overall_from_csv(csv_path, "BSS")
@@ -360,6 +335,8 @@ dss_df_0_1 = overall_from_csv(dss_path_point_one, "DSS 0.1")
 dss_df_0_05 = overall_from_csv(dss_path_point_nought_five, "DSS 0.05")
 dss_df_hybrid = overall_from_csv(dss_path_hybrid, "DSS (0.1, 0)")
 dss_df_double_hybrid = overall_from_csv(dss_path_double_hybrid, "DSS (0.2, 0)")
+dss_df_0_5_0 = overall_from_csv(dss_path_0_5_0, "DSS (0.5, 0)")
+dss_df_1_0 = overall_from_csv(dss_path_1_0, "DSS (1.0, 0)")
 # dss_df      = overall_from_csv("/content/summary_all_dss.csv",   "DSS")
 
 # -----------------------------
@@ -375,16 +352,18 @@ orig_df = pd.concat([orig_df, pd.DataFrame([{"model": "majority_vote", "original
 
 table = orig_df.merge(baseline_df, on="model", how="left") \
 			.merge(bss_df, on="model", how="left") \
-			.merge(dss_df_0_1, on="model", how="left") \
-			.merge(dss_df_0_05, on="model", how="left") \
-			.merge(dss_df_hybrid, on="model", how="left") \
-			.merge(dss_df_double_hybrid, on="model", how="left")
+			.merge(dss_df_0_5_0, on="model", how="left") \
+			# .merge(dss_df_double_hybrid, on="model", how="left") \
+			# .merge(dss_df_1_0, on="model", how="left")
+			# .merge(dss_df_0_1, on="model", how="left") \
+			# .merge(dss_df_0_05, on="model", how="left") \
+			# .merge(dss_df_hybrid, on="model", how="left") \
 			#    .merge(bss_df,      on="model", how="left") \
 			#    .merge(dss_df,      on="model", how="left")
 
 # Optional: sort by model & round to 3 decimals
 table = table.sort_values("model").reset_index(drop=True)
-table[["original", "Baseline", "BSS", "DSS 0.1", "DSS 0.05", "DSS (0.1, 0)", "DSS (0.2, 0)"]] = table[["original", "Baseline", "BSS", "DSS 0.1", "DSS 0.05", "DSS (0.1, 0)", "DSS (0.2, 0)"]].round(3)
+# table[["original", "Baseline", "BSS", "DSS 0.1", "DSS 0.05", "DSS (0.1, 0)", "DSS (0.2, 0)", "DSS (0.5, 0)", "DSS (1.0, 0)"]] = table[["original", "Baseline", "BSS", "DSS 0.1", "DSS 0.05", "DSS (0.1, 0)", "DSS (0.2, 0)", "DSS (0.5, 0)", "DSS (1.0, 0)"]].round(3)
 # table[["original", "BSS", "DSS 0.1", "DSS 0.05", "DSS Hybrid"]] = table[["original", "BSS", "DSS 0.1", "DSS 0.05", "DSS Hybrid"]].round(3)
 # table[["original", "Baseline", "BSS", "DSS"]] = table[["original", "Baseline", "BSS", "DSS"]].round(3)
 
