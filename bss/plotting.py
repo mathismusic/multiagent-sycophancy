@@ -78,4 +78,4 @@ def interactive_heatmap():
     plt.savefig('heatmap_recreation.png', dpi=300, bbox_inches='tight')
     plt.show()
 
-
+interactive_heatmap()

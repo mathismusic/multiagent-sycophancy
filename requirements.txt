@@ -9,3 +9,8 @@ pandas
 torch
 pydantic
 dotenv
+# visualization
+matplotlib
+seaborn
+# interactive
+ipykernel
