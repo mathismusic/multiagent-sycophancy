@@ -1,8 +1,0 @@
-openai==0.27.8
-tqdm==4.65.0 
-curl_cffi==0.5.7
-backoff==2.2.1
-scipy
-pandas
-google-generativeai
-python-dotenv

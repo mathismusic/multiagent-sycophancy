@@ -1,6 +1,0 @@
-You are to answer a multiple choice question. Choose the best answer from the given options.
-{{
-    "question": {question_text},
-    "choices": {choices_text}
-}}
-You MUST output your answer as a single, valid, compact JSON object and NOTHING ELSE. Do not include any surrounding text, commentary, or markdown fences (like ```json). The JSON object must conform to this structure: {{"answer": <selected_choice>, "explanation": <your_explanation>}} where <selected_choice> is the choice (A/B/C/D) you think is correct, and <your_explanation> is a single-line explanation of why you chose that answer.
