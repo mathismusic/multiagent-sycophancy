@@ -28,4 +28,6 @@ python debate_evaluation.py --debate-results-jsonl=<jsonl file from multiagent-d
 
 and to reproduce our results, please run `python process_eval_results.py` and the cells in `plotter.ipynb`.
 
+All experiments were run on a single H200 GPU with 141GB RAM and 200 GB disk. We required 74GB of RAM to store the six debating models simultaneously.
+
 Thank you!
