@@ -32,6 +32,10 @@ models_map = {
     "qwen3b": "Qwen/Qwen2.5-3B-Instruct",
     "qwen7b": "Qwen/Qwen2.5-7B-Instruct",
     "qwen14b": "Qwen/Qwen2.5-14B-Instruct",
+    "qwen32b": "Qwen/Qwen2.5-32B-Instruct",
+    "mistral3b":"mistralai/Ministral-3-3B-Instruct-2512",
+    "mistral8b":"mistralai/Ministral-3-8B-Instruct-2512",
+    "mistral14b":"mistralai/Ministral-3-14B-Instruct-2512",
 }
 
 
@@ -43,6 +47,10 @@ models_to_backends = {"llama3b":"hf",
                         "qwen3b":"hf",
                         "qwen7b":"hf",
                         "qwen14b":"hf",
+                        "qwen32b":"hf",
+                        "mistral3b":"hf",
+                        "mistral8b":"hf",
+                        "mistral14b":"hf",
                       }
 
 # -----------------------------
