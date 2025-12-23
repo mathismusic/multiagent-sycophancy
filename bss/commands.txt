@@ -3,3 +3,37 @@ python multiagent-debate.py --model llama1b llama3b --rounds 3 --no_of_debate_sa
 python multiagent-debate.py --model llama1b llama3b llama8b --rounds 5 --no_of_debate_samples 5 --use_dss_scores
 
 
+        model  MMLU Debate Results (Iterated)
+      llama1b                          0.5500
+      llama3b                          0.0250
+      llama8b                          0.2625
+      qwen14b                          0.2375
+       qwen3b                          0.2000
+       qwen7b                          0.2625
+majority_vote                          0.2375
+
+        model  MMLU Debate Results (Iterated)
+      llama1b                          0.5125
+      llama3b                          0.0250
+      llama8b                          0.3000
+      qwen14b                          0.2500
+       qwen3b                          0.2500
+       qwen7b                          0.2625
+majority_vote                          0.2625
+
+      llama1b                          0.5750
+      llama3b                          0.0250
+      llama8b                          0.2750
+      qwen14b                          0.2500
+       qwen3b                          0.2625
+       qwen7b                          0.2750
+majority_vote                          0.2625
+
+       model  MMLU Debate Results (Iterated)
+      llama1b                          0.5750
+      llama3b                          0.0125
+      llama8b                          0.3125
+      qwen14b                          0.2625
+       qwen3b                          0.2375
+       qwen7b                          0.2875
+majority_vote                          0.2875

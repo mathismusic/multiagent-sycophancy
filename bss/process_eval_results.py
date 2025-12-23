@@ -2,10 +2,6 @@ import pandas as pd
 import numpy as np
 from typing import Optional, Dict, Any
 
-# Read the CSV file
-csv_path = "eval_results/mmlu_debate_metadata_bss_only__EVAL/summary_all.csv"
-df = pd.read_csv(csv_path)
-
 # =============================
 # Overall sycophancy per model
 # =============================
@@ -293,7 +289,6 @@ def overall_from_csv(path: str, title: str) -> pd.DataFrame:
 	print(out)
 	print(majority)
 	out = pd.concat([out, majority], ignore_index=True)
-	print("wtf", out)
 	return out
 
 def majority_from_csv(path: str, title: str) -> pd.DataFrame:
@@ -316,55 +311,58 @@ def majority_from_csv(path: str, title: str) -> pd.DataFrame:
 	return out
 
 
-# -----------------------------
-# Compute tables for each CSV
-# -----------------------------
-# baseline_df = overall_from_csv("/content/summary_all_nobss.csv", "Baseline")
-baseline_path = "eval_results/mmlu_debate_metadata_original__EVAL/summary_all.csv"
-bss_path = "eval_results/mmlu_debate_metadata_bss_only__EVAL/summary_all.csv"
-dss_path_point_one = "eval_results/mmlu_debate_metadata_dss_0.1__EVAL/summary_all.csv"
-dss_path_point_nought_five = "eval_results/mmlu_debate_metadata_dss_0.05__EVAL/summary_all.csv"
-dss_path_hybrid = "eval_results/mmlu_debate_metadata_dss_0.1_0__EVAL/summary_all.csv"
-dss_path_double_hybrid = "eval_results/mmlu_debate_metadata_dss_0.4_0__EVAL/summary_all.csv"
-dss_path_0_5_0 = "eval_results/mmlu_debate_metadata_dss_0.5_0__EVAL/summary_all.csv"
-dss_path_1_0 = "eval_results/mmlu_debate_metadata_dss_1_0__EVAL/summary_all.csv"
+if __name__ == "__main__":
+	# csv_path = "eval_results/mmlu_debate_metadata_bss_only__EVAL/summary_all.csv"
+	# df = pd.read_csv(csv_path)
+	# -----------------------------
+	# Compute tables for each CSV
+	# -----------------------------
+	# baseline_df = overall_from_csv("/content/summary_all_nobss.csv", "Baseline")
+	baseline_path = "eval_results/mmlu_debate_metadata_original__EVAL/summary_all.csv"
+	bss_path = "eval_results/mmlu_debate_metadata_bss_only__EVAL/summary_all.csv"
+	dss_path_point_one = "eval_results/mmlu_debate_metadata_dss_0.1__EVAL/summary_all.csv"
+	dss_path_point_nought_five = "eval_results/mmlu_debate_metadata_dss_0.05__EVAL/summary_all.csv"
+	dss_path_hybrid = "eval_results/mmlu_debate_metadata_dss_0.1_0__EVAL/summary_all.csv"
+	dss_path_double_hybrid = "eval_results/mmlu_debate_metadata_dss_0.4_0__EVAL/summary_all.csv"
+	dss_path_0_5_0 = "eval_results/mmlu_debate_metadata_dss_0.5_0__EVAL/summary_all.csv"
+	dss_path_1_0 = "eval_results/mmlu_debate_metadata_dss_1_0__EVAL/summary_all.csv"
 
-baseline_df = overall_from_csv(baseline_path, "Baseline")
-bss_df      = overall_from_csv(csv_path, "BSS")
-dss_df_0_1 = overall_from_csv(dss_path_point_one, "DSS 0.1")
-dss_df_0_05 = overall_from_csv(dss_path_point_nought_five, "DSS 0.05")
-dss_df_hybrid = overall_from_csv(dss_path_hybrid, "DSS (0.1, 0)")
-dss_df_double_hybrid = overall_from_csv(dss_path_double_hybrid, "DSS (0.2, 0)")
-dss_df_0_5_0 = overall_from_csv(dss_path_0_5_0, "DSS (0.5, 0)")
-dss_df_1_0 = overall_from_csv(dss_path_1_0, "DSS (1.0, 0)")
-# dss_df      = overall_from_csv("/content/summary_all_dss.csv",   "DSS")
+	baseline_df = overall_from_csv(baseline_path, "Baseline")
+	bss_df      = overall_from_csv(csv_path, "BSS")
+	dss_df_0_1 = overall_from_csv(dss_path_point_one, "DSS 0.1")
+	dss_df_0_05 = overall_from_csv(dss_path_point_nought_five, "DSS 0.05")
+	dss_df_hybrid = overall_from_csv(dss_path_hybrid, "DSS (0.1, 0)")
+	dss_df_double_hybrid = overall_from_csv(dss_path_double_hybrid, "DSS (0.2, 0)")
+	dss_df_0_5_0 = overall_from_csv(dss_path_0_5_0, "DSS (0.5, 0)")
+	dss_df_1_0 = overall_from_csv(dss_path_1_0, "DSS (1.0, 0)")
+	# dss_df      = overall_from_csv("/content/summary_all_dss.csv",   "DSS")
 
-# -----------------------------
-# Build final comparison table
-# -----------------------------
-orig_df = (
-	pd.DataFrame.from_dict(original_scores, orient="index", columns=["original"])
-	.reset_index()
-	.rename(columns={"index": "model"})
-)
-# add a row for majority vote
-orig_df = pd.concat([orig_df, pd.DataFrame([{"model": "majority_vote", "original": np.nan}])], ignore_index=True)
+	# -----------------------------
+	# Build final comparison table
+	# -----------------------------
+	orig_df = (
+		pd.DataFrame.from_dict(original_scores, orient="index", columns=["original"])
+		.reset_index()
+		.rename(columns={"index": "model"})
+	)
+	# add a row for majority vote
+	orig_df = pd.concat([orig_df, pd.DataFrame([{"model": "majority_vote", "original": np.nan}])], ignore_index=True)
 
-table = orig_df.merge(baseline_df, on="model", how="left") \
-			.merge(bss_df, on="model", how="left") \
-			.merge(dss_df_0_5_0, on="model", how="left") \
-			# .merge(dss_df_double_hybrid, on="model", how="left") \
-			# .merge(dss_df_1_0, on="model", how="left")
-			# .merge(dss_df_0_1, on="model", how="left") \
-			# .merge(dss_df_0_05, on="model", how="left") \
-			# .merge(dss_df_hybrid, on="model", how="left") \
-			#    .merge(bss_df,      on="model", how="left") \
-			#    .merge(dss_df,      on="model", how="left")
+	table = orig_df.merge(baseline_df, on="model", how="left") \
+				.merge(bss_df, on="model", how="left") \
+				.merge(dss_df_0_5_0, on="model", how="left") \
+				# .merge(dss_df_double_hybrid, on="model", how="left") \
+				# .merge(dss_df_1_0, on="model", how="left")
+				# .merge(dss_df_0_1, on="model", how="left") \
+				# .merge(dss_df_0_05, on="model", how="left") \
+				# .merge(dss_df_hybrid, on="model", how="left") \
+				#    .merge(bss_df,      on="model", how="left") \
+				#    .merge(dss_df,      on="model", how="left")
 
-# Optional: sort by model & round to 3 decimals
-table = table.sort_values("model").reset_index(drop=True)
-# table[["original", "Baseline", "BSS", "DSS 0.1", "DSS 0.05", "DSS (0.1, 0)", "DSS (0.2, 0)", "DSS (0.5, 0)", "DSS (1.0, 0)"]] = table[["original", "Baseline", "BSS", "DSS 0.1", "DSS 0.05", "DSS (0.1, 0)", "DSS (0.2, 0)", "DSS (0.5, 0)", "DSS (1.0, 0)"]].round(3)
-# table[["original", "BSS", "DSS 0.1", "DSS 0.05", "DSS Hybrid"]] = table[["original", "BSS", "DSS 0.1", "DSS 0.05", "DSS Hybrid"]].round(3)
-# table[["original", "Baseline", "BSS", "DSS"]] = table[["original", "Baseline", "BSS", "DSS"]].round(3)
+	# Optional: sort by model & round to 3 decimals
+	table = table.sort_values("model").reset_index(drop=True)
+	# table[["original", "Baseline", "BSS", "DSS 0.1", "DSS 0.05", "DSS (0.1, 0)", "DSS (0.2, 0)", "DSS (0.5, 0)", "DSS (1.0, 0)"]] = table[["original", "Baseline", "BSS", "DSS 0.1", "DSS 0.05", "DSS (0.1, 0)", "DSS (0.2, 0)", "DSS (0.5, 0)", "DSS (1.0, 0)"]].round(3)
+	# table[["original", "BSS", "DSS 0.1", "DSS 0.05", "DSS Hybrid"]] = table[["original", "BSS", "DSS 0.1", "DSS 0.05", "DSS Hybrid"]].round(3)
+	# table[["original", "Baseline", "BSS", "DSS"]] = table[["original", "Baseline", "BSS", "DSS"]].round(3)
 
-print(table.to_string(index=False))
+	print(table.to_string(index=False))

@@ -1,8 +1,7 @@
 """
 Run multi-agent debates using sycophancy scores (base or dynamic).
 Usage:
-    python multiagent-debate.py --model llama1b llama3b llama8b qwen3b qwen7b qwen14b \
-        --dataset MMLU --dataset_type val --rounds 5 --use_bss_scores (or --use_dss_scores)
+    python multiagent-debate.py --model llama1b llama3b llama8b qwen3b qwen7b qwen14b --dataset MMLU --dataset_type val --rounds 5 --use_bss_scores (or --use_dss_scores)
 """
 
 import argparse
@@ -239,7 +238,7 @@ def main():
     parser.add_argument("--dataset", default="MMLU", type=str)
     parser.add_argument("--rounds", default=5, type=int)
     parser.add_argument("--no_of_debate_samples", default=20, type=int)
-    # parser.add_argument("--bss_samples", default=100, type=int)
+    parser.add_argument("--bss_samples", default=100, type=int)
     parser.add_argument("--dataset_type", default="val", type=str)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--metric", nargs="+", default=["picking_sides", "mirroring", "who_said", "delusion"], type=str)
@@ -444,7 +443,7 @@ def main():
     print(f"\nDebated on Total Prompts: {len(all_prompts)}")
     print(f"\nTotal examples recorded: {len(all_logs)}")
 
-    with open("mmlu_debate_metadata.jsonl", "w") as f:
+    with open("eval_results/mmlu_debate_metadata_iterated.jsonl", "w") as f:
         for rec in all_logs:
             f.write(json.dumps(rec) + "\n")
 

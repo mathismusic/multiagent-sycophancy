@@ -169,56 +169,6 @@ def mmlu_to_delusion_items(samples: List[MMLUSample]) -> List[DelusionItem]:
     print(f"[data] built {len(items)} delusion items from MMLU")
     return items
 
-
-# -----------------------------
-# MMLU loading (validation)
-# -----------------------------
-def load_mmlu_from_hf(
-        subjects,
-        split: Literal["train", "test", "val"] = "val",
-        max_items: Optional[int] = None,
-) -> List[MMLUSample]:
-    """
-    Load MMLU split from Hugging Face.
-
-    split: "train", "test", or "val"
-           (we map "val" -> "validation" for HF)
-    """
-    # Map our shorthand to the HF split name
-    hf_split_map = {
-        "train": "train",
-        "test": "test",
-        "val": "validation",
-    }
-    hf_split = hf_split_map[split]  # safe: split is constrained by Literal
-
-    print(f"[data] downloading cais/mmlu ('all' / '{hf_split}') from Hugging Face ...")
-    ds_all = load_dataset("cais/mmlu", "all", split=hf_split)
-
-    # Filtering out only relevant samples
-#     ds_all = load_dataset("cais/mmlu", "all", split=hf_split)
-#     subjects = ["abstract_algebra", "anatomy", "machine_learning", "high_school_physics", "us_foreign_policy"]
-
-    ds = ds_all.filter(lambda x: x["subject"] in subjects)
-
-    samples: List[MMLUSample] = []
-    for ex in ds:
-        question = ex["question"]
-        choices = list(ex["choices"])
-        correct_idx = int(ex["answer"])
-        subject = ex["subject"]
-        samples.append(MMLUSample(question=question, choices=choices, correct_idx=correct_idx, subject=subject))
-
-    # Ensure randomization (uses global RNG; seed with set_seed() if you want reproducibility)
-    random.shuffle(samples)
-
-    if max_items is not None:
-        samples = samples[:max_items]
-
-    print(f"[data] loaded {len(samples)} MMLU {split} samples")
-    return samples
-
-
 def build_textgen_pipeline(model, device: str):
     model_name = models_map[model]
     print(f"[load] building pipeline for {model_name} on device {device} ...")
@@ -393,36 +343,64 @@ parsing_metrics_map = {
     "delusion": parse_correct_incorrect,
 }
 
-## not used
-def mmlu_validation_to_csv(ds, csv_path: str = "mmlu_validation_bss.csv"):
-    # Load MMLU "all" config, validation split
-#     dataset = load_dataset("cais/mmlu", "all", split="validation")
 
-    # Convert to pandas DataFrame
-    df = ds.to_pandas()
 
-    # Get the label names for answers (["A", "B", "C", "D"])
-    answer_labels = dataset.features["answer"].names
 
-    # Map numeric answer (0–3) to letter ("A"–"D")
-    df["answer_letter"] = df["answer"].map(lambda idx: answer_labels[idx])
 
-    # Flatten the "choices" sequence into separate columns: choice_A, choice_B, ...
-    for i, label in enumerate(answer_labels):
-        df[f"choice_{label}"] = df["choices"].apply(lambda opts: opts[i])
 
-    # Optionally drop the original "choices" column if you don't need it
-    df = df.drop(columns=["choices"])
-
-    # Save to CSV
-    df.to_csv(csv_path, index=False)
-    print(f"Saved MMLU validation set to {csv_path}")
 
 def count_by_subject(samples):
     c = defaultdict(int)
     for s in samples:
         c[s.subject] += 1
     return dict(c)
+
+# -----------------------------
+# MMLU loading
+# -----------------------------
+def load_mmlu_from_hf(
+        subjects,
+        split: Literal["train", "test", "val"],
+        max_items: Optional[int] = None,
+) -> List[MMLUSample]:
+    """
+    Load MMLU split from Hugging Face.
+
+    split: "train", "test", or "val"
+           (we map "val" -> "validation" for HF)
+    """
+    # Map our shorthand to the HF split name
+    hf_split_map = {
+        "train": "train",
+        "test": "test",
+        "val": "validation",
+    }
+    hf_split = hf_split_map[split]  # safe: split is constrained by Literal
+
+    print(f"[data] downloading cais/mmlu ('all' / '{hf_split}') from Hugging Face ...")
+    ds_all = load_dataset("cais/mmlu", "all", split=hf_split)
+
+    # Filtering out only relevant samples
+#     ds_all = load_dataset("cais/mmlu", "all", split=hf_split)
+#     subjects = ["abstract_algebra", "anatomy", "machine_learning", "high_school_physics", "us_foreign_policy"]
+
+    ds = ds_all.filter(lambda x: x["subject"] in subjects)
+
+    samples: List[MMLUSample] = []
+    for ex in ds:
+        question = ex["question"]
+        choices = list(ex["choices"])
+        correct_idx = int(ex["answer"])
+        subject = ex["subject"]
+        samples.append(MMLUSample(question=question, choices=choices, correct_idx=correct_idx, subject=subject))
+
+    random.shuffle(samples)
+
+    if max_items is not None:
+        samples = samples[:max_items]
+
+    print(f"[data] loaded {len(samples)} MMLU {split} samples")
+    return samples
 
 def mmlu_list_to_csv(samples, csv_path: str = "mmlu_debate_samples.csv"):
     """
@@ -462,16 +440,6 @@ def load_split_save_dataset(args):
     mmlu_samples = load_mmlu_from_hf(args.subjects, args.dataset_type)
     print(f"\nLength of MMLU_Samples: ", len(mmlu_samples))
 
-    # Group by subject
-    by_subject = defaultdict(list)
-    for sample in mmlu_samples:
-        by_subject[sample.subject].append(sample)
-
-    print("Counts per subject:")
-    for subj, lst in by_subject.items():
-        print(subj, len(lst))
-
-
     num_subjects = len(args.subjects)       ## 5 subjects
 
     # ---------------------------------------------------
@@ -479,7 +447,18 @@ def load_split_save_dataset(args):
     # ---------------------------------------------------
     requested_total = args.no_of_debate_samples  # e.g., 20
     requested_per_subject = requested_total // num_subjects         ## 20/5 = 4
+    bss_requested_per_subject = args.bss_samples//num_subjects
 
+    # Group by subject
+    by_subject = defaultdict(list)
+    for sample in mmlu_samples:
+        if len(by_subject[sample.subject]) >= bss_requested_per_subject + requested_per_subject:
+            continue
+        by_subject[sample.subject].append(sample)
+
+    print("Counts per subject:")
+    for subj, lst in by_subject.items():
+        print(subj, len(lst))
 
     # Max we can actually take per subject (bounded by available data)
     max_per_subject_possible = min(len(by_subject[subj]) for subj in args.subjects)
@@ -501,6 +480,8 @@ def load_split_save_dataset(args):
     debate_samples = []
     bss_samples = []
 
+    random.seed(42)
+
     for subj in args.subjects:
         samples_for_subj = by_subject[subj]
         random.shuffle(samples_for_subj)  # randomize within subject
@@ -521,6 +502,6 @@ def load_split_save_dataset(args):
 
     print("\nSaving debate and bss samples to CSV...")
     mmlu_list_to_csv(debate_samples, "mmlu_debate_samples.csv")
-    # mmlu_list_to_csv(bss_samples, "mmlu_bss_samples.csv")
+    mmlu_list_to_csv(bss_samples, "mmlu_bss_samples.csv")
 
     return debate_samples, bss_samples
