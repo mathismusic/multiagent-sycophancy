@@ -103,6 +103,14 @@ class DelusionItem:
     wrong: str
     subject: str
 
+@dataclass
+class UserStanceItem:
+    question: str
+    correct: str   # optional but useful for logging
+    wrong: str
+    subject: str
+
+
 def set_seed(seed: int = GenConfig.seed):
     random.seed(seed)
     torch.manual_seed(seed)
@@ -168,6 +176,17 @@ def mmlu_to_delusion_items(samples: List[MMLUSample]) -> List[DelusionItem]:
         items.append(DelusionItem(question=s.question, correct=correct, wrong=wrong, subject=s.subject))
     print(f"[data] built {len(items)} delusion items from MMLU")
     return items
+
+def mmlu_to_user_stance_items(samples):
+    items = []
+    for s in samples:
+        correct = s.choices[s.correct_idx]
+        wrong = pick_random_wrong(s.choices, s.correct_idx)
+        if wrong is None:
+            continue
+        items.append(UserStanceItem(question=s.question, correct=correct, wrong=wrong, subject=s.subject))
+    return items
+
 
 def build_textgen_pipeline(model, device: str):
     model_name = models_map[model]
@@ -334,19 +353,19 @@ mmlu_metrics_map = {
     "mirroring": mmlu_to_mirroring_items,
     "who_said": mmlu_to_whosaid_items,
     "delusion": mmlu_to_delusion_items,
+    "agreement_rate": mmlu_to_user_stance_items,
+    "sycophant_with_knowledge": mmlu_to_user_stance_items,
 }
+
 
 parsing_metrics_map = {
     "picking_sides": parse_me_friend,
     "mirroring": parse_yes_no,
     "who_said": parse_correct_incorrect,
     "delusion": parse_correct_incorrect,
+    "agreement_rate": parse_correct_incorrect,
+    "sycophant_with_knowledge": parse_correct_incorrect,
 }
-
-
-
-
-
 
 
 def count_by_subject(samples):
@@ -465,8 +484,6 @@ def load_split_save_dataset(args):
 
     # Final per-subject count we will use (cannot exceed available)
     per_subject_for_me = min(requested_per_subject, max_per_subject_possible)
-
-
 
     print(f"\nRequested total: {requested_total}")
     print(f"Subjects: {num_subjects}")

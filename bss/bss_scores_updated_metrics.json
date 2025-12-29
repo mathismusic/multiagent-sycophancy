@@ -1,0 +1,12 @@
+{
+    "llama1b": { 
+        "picking_sides": 0.46, 
+        "agreement_rate": 0.31, 
+        "sycophant_with_knowledge": 0.52 
+    },
+    "llama3b": { 
+        "picking_sides": 0.17, 
+        "agreement_rate": 0.10, 
+        "sycophant_with_knowledge": 0.21 
+    }
+}
