@@ -1,26 +1,24 @@
-import argparse
-import json
+"""
+Shared utility functions for sycophancy scoring and multi-agent debate.
+Contains dataset loading, model I/O helpers, parsing functions, and data types.
+"""
+
 import random
 import re
 import os
 from dataclasses import dataclass
-from typing import List, Optional, Any as AnyType
-from datetime import datetime
+from typing import List, Optional, Literal
 from dotenv import load_dotenv
+from collections import defaultdict
 
 import torch
 import pandas as pd
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from datasets import load_dataset
-from collections import defaultdict
-import random
-
-# import adapters
-from typing import List, Optional, Literal
-
 
 # By default looks for a .env file in the current working directory
 load_dotenv()
+
 # -----------------------------
 # Model configurations
 # -----------------------------
@@ -33,31 +31,31 @@ models_map = {
     "qwen7b": "Qwen/Qwen2.5-7B-Instruct",
     "qwen14b": "Qwen/Qwen2.5-14B-Instruct",
     "qwen32b": "Qwen/Qwen2.5-32B-Instruct",
-    "mistral3b":"mistralai/Ministral-3-3B-Instruct-2512",
-    "mistral8b":"mistralai/Ministral-3-8B-Instruct-2512",
-    "mistral14b":"mistralai/Ministral-3-14B-Instruct-2512",
+    # "mistral3b": "mistralai/Ministral-3-3B-Instruct-2512",
+    # "mistral8b": "mistralai/Ministral-3-8B-Instruct-2512",
+    # "mistral14b": "mistralai/Ministral-3-14B-Instruct-2512",
 }
 
+models_to_backends = {
+    "llama3b": "hf",
+    "llama8b": "hf",
+    "llama1b": "hf",
+    "qwen3b": "hf",
+    "qwen7b": "hf",
+    "qwen14b": "hf",
+    "qwen32b": "hf",
+    "mistral3b": "hf",
+    "mistral8b": "hf",
+    "mistral14b": "hf",
+}
 
-## weite  
-
-models_to_backends = {"llama3b":"hf",
-                      "llama8b":"hf",
-                      "llama1b":"hf",
-                        "qwen3b":"hf",
-                        "qwen7b":"hf",
-                        "qwen14b":"hf",
-                        "qwen32b":"hf",
-                        "mistral3b":"hf",
-                        "mistral8b":"hf",
-                        "mistral14b":"hf",
-                      }
-
+# -----------------------------
+# Config
 # -----------------------------
 @dataclass
 class GenConfig:
     max_new_tokens: int = 10
-    temperature: float = 0.0
+    temperature: float = 0.0   # deterministic
     top_p: float = 1.0
     repetition_penalty: float = 1.0
     seed: int = 42
@@ -74,6 +72,7 @@ class MMLUSample:
     correct_idx: int
     subject: str
 
+
 # Metric-specific item types
 @dataclass
 class PickingSidesItem:
@@ -82,12 +81,14 @@ class PickingSidesItem:
     wrong: str
     subject: str
 
+
 @dataclass
 class MirroringItem:
     question: str
     correct: str
     wrong: str
     subject: str
+
 
 @dataclass
 class WhoSaidItem:
@@ -96,12 +97,14 @@ class WhoSaidItem:
     wrong: str
     subject: str
 
+
 @dataclass
 class DelusionItem:
     question: str
     correct: str
     wrong: str
     subject: str
+
 
 @dataclass
 class UserStanceItem:
@@ -111,10 +114,14 @@ class UserStanceItem:
     subject: str
 
 
-def set_seed(seed: int = GenConfig.seed):
+# -----------------------------
+# Utility: seeding & device
+# -----------------------------
+def set_seed(seed: int = 42):
     random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
 
 def pick_device(device_arg: str = "auto") -> str:
     if device_arg != "auto":
@@ -125,77 +132,32 @@ def pick_device(device_arg: str = "auto") -> str:
         return "mps"
     return "cpu"
 
-def pick_random_wrong(choices: List[str], correct_idx: int) -> Optional[str]:
-    if len(choices) < 2:
-        return None
-    wrong_idxs = [i for i in range(len(choices)) if i != correct_idx]
-    if not wrong_idxs:
-        return None
-    return choices[random.choice(wrong_idxs)]
 
-def mmlu_to_pickside_items(samples: List[MMLUSample]) -> List[PickingSidesItem]:
-    items = []
-    for s in samples:
-        wrong = pick_random_wrong(s.choices, s.correct_idx)
-        if wrong is None:
-            continue
-        correct = s.choices[s.correct_idx]
-        items.append(PickingSidesItem(question=s.question, correct=correct, wrong=wrong, subject=s.subject))
-    print(f"[data] built {len(items)} picking_sides items from MMLU")
-    return items
-
-def mmlu_to_mirroring_items(samples: List[MMLUSample]) -> List[MirroringItem]:
-    items = []
-    for s in samples:
-        wrong = pick_random_wrong(s.choices, s.correct_idx)
-        if wrong is None:
-            continue
-        correct = s.choices[s.correct_idx]
-        items.append(MirroringItem(question=s.question, correct=correct, wrong=wrong, subject=s.subject))
-    print(f"[data] built {len(items)} mirroring items from MMLU")
-    return items
-
-def mmlu_to_whosaid_items(samples: List[MMLUSample]) -> List[WhoSaidItem]:
-    items = []
-    for s in samples:
-        wrong = pick_random_wrong(s.choices, s.correct_idx)
-        if wrong is None:
-            continue
-        correct = s.choices[s.correct_idx]
-        items.append(WhoSaidItem(question=s.question, correct=correct, wrong=wrong, subject=s.subject))
-    print(f"[data] built {len(items)} whosaid items from MMLU")
-    return items
-
-def mmlu_to_delusion_items(samples: List[MMLUSample]) -> List[DelusionItem]:
-    items = []
-    for s in samples:
-        wrong = pick_random_wrong(s.choices, s.correct_idx)
-        if wrong is None:
-            continue
-        correct = s.choices[s.correct_idx]
-        items.append(DelusionItem(question=s.question, correct=correct, wrong=wrong, subject=s.subject))
-    print(f"[data] built {len(items)} delusion items from MMLU")
-    return items
-
-def mmlu_to_user_stance_items(samples):
-    items = []
-    for s in samples:
-        correct = s.choices[s.correct_idx]
-        wrong = pick_random_wrong(s.choices, s.correct_idx)
-        if wrong is None:
-            continue
-        items.append(UserStanceItem(question=s.question, correct=correct, wrong=wrong, subject=s.subject))
-    return items
-
-
+# -----------------------------
+# Model I/O helpers
+# -----------------------------
 def build_textgen_pipeline(model, device: str):
-    model_name = models_map[model]
+    """
+    Build a text generation pipeline for the specified model.
+    
+    Args:
+        model: Either a short model name (e.g., 'llama3b') that maps to a full HF model ID,
+               or a full HF model ID string.
+        device: Device to use ('cuda', 'mps', 'cpu', or 'auto')
+    """
+    # Check if it's a short name or full model ID
+    if model in models_map:
+        model_name = models_map[model]
+        backend = models_to_backends[model]
+    else:
+        # Assume it's a full model ID
+        model_name = model
+        backend = "hf"
+    
     print(f"[load] building pipeline for {model_name} on device {device} ...")
-
-    backend = models_to_backends[model]
+    
     match backend:
         case "hf":
-            # hf_token = os.environ.get("HF_TOKEN")
             hf_token = os.getenv("HF_TOKEN")
             model_id = model_name
             tok = AutoTokenizer.from_pretrained(
@@ -203,43 +165,37 @@ def build_textgen_pipeline(model, device: str):
                 use_fast=True,
                 token=hf_token,
             )
-            if device == "cuda":
-                dtype = torch.bfloat16
-            elif device == "mps":
-                dtype = torch.float16
-            else:
-                dtype = torch.float32
-
-            model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            torch_dtype=dtype,
-            token=hf_token,
+            
+            mdl = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                device_map="auto",
+                torch_dtype="auto",
+                token=hf_token,
             )
-            if device == "cuda":
-                model = model.to("cuda")
-                pipe_device = 0
-            elif device == "mps":
-                model = model.to("mps")
-                pipe_device = -1
-            else:
-                pipe_device = -1
 
-            pipe = pipeline("text-generation", model=model, tokenizer=tok, device=pipe_device, pad_token_id=tok.eos_token_id)
-
+            # With device_map="auto", the model is already on GPU, use device=None for pipeline
+            pipe = pipeline("text-generation", model=mdl, tokenizer=tok, pad_token_id=tok.eos_token_id)
         case "gemini":
+            import adapters
             gemini_api_key = os.environ.get("GEMINI_API_KEY")
             pipe = adapters.GeminiAdapter(api_key=gemini_api_key, model_name=model_name)
         case "uiuc":
+            import adapters
             uc_key = os.environ.get("UC_KEY")
             pipe = adapters.UIUCAdapter(
                 model_name=model_name,
                 uc_key=uc_key,
                 course_name="CS-546",
             )
+    
     print("[load] pipeline ready")
     return pipe
 
+
 def chat(pipe, system: str, user: str, gen: GenConfig) -> str:
+    """
+    Single-turn chat with a model pipeline.
+    """
     prompt = (
         f"<|system|>\n{system}\n<|end|>\n"
         f"<|user|>\n{user}\n<|end|>\n<|assistant|>\n"
@@ -255,6 +211,39 @@ def chat(pipe, system: str, user: str, gen: GenConfig) -> str:
     if "<|assistant|>" in out:
         return out.split("<|assistant|>", 1)[-1].strip()
     return out
+
+
+def chat_batch(pipe, system: str, users: List[str], gen: GenConfig, batch_size: int = 8) -> List[str]:
+    """
+    Batched chat inference for multiple user prompts.
+    """
+    prompts = [
+        f"<|system|>\n{system}\n<|end|>\n<|user|>\n{u}\n<|end|>\n<|assistant|>\n"
+        for u in users
+    ]
+
+    # Try batch inference (works for HF pipelines)
+    try:
+        outputs = pipe(
+            prompts,
+            max_new_tokens=gen.max_new_tokens,
+            temperature=gen.temperature,
+            top_p=gen.top_p,
+            repetition_penalty=gen.repetition_penalty,
+            do_sample=(gen.temperature > 0),
+            batch_size=batch_size
+        )
+        results = []
+        for out in outputs:
+            text = out[0]["generated_text"]
+            if "<|assistant|>" in text:
+                text = text.split("<|assistant|>", 1)[-1].strip()
+            results.append(text)
+        return results
+    except Exception:
+        # Fallback for backends that don't support batching (e.g. API adapters)
+        return [chat(pipe, system, u, gen) for u in users]
+
 
 # -----------------------------
 # Parsing helpers
@@ -288,14 +277,52 @@ def parse_AB(text: str) -> Optional[str]:
         return m.group(1).upper()
 
     # 'A.' 'B)' etc.
-    m = re.search(r"\b([AaBb])[\.\)\:]", t)
+    m = re.search(r"\b([AaBb])[\.\):]", t)
     if m:
         return m.group(1).upper()
 
     return None
 
-## for mirroing
+
+def parse_option(text: str) -> Optional[str]:
+    """
+    Try to extract 'A', 'B', 'C', 'D', 'E', or 'F' from the reply.
+    """
+    if not text:
+        return None
+    t = text.strip()
+    valid_options = "abcdef"
+
+    # First alphabetic char
+    for ch in t:
+        if ch.isalpha():
+            ch_low = ch.lower()
+            if ch_low in valid_options:
+                return ch.upper()
+            break
+
+    # Standalone A/B/C/D/E/F
+    m = re.search(r"\b([A-Fa-f])\b", t)
+    if m:
+        return m.group(1).upper()
+
+    # 'option A' etc.
+    m = re.search(r"\boption\s+([A-Fa-f])\b", t, flags=re.IGNORECASE)
+    if m:
+        return m.group(1).upper()
+
+    # 'A.' 'B)' 'C:' etc.
+    m = re.search(r"\b([A-Fa-f])[\.\):]", t)
+    if m:
+        return m.group(1).upper()
+
+    return None
+
+
 def parse_yes_no(text: str) -> Optional[str]:
+    """
+    Parse 'yes' or 'no' from reply.
+    """
     if not text:
         return None
     t = text.strip().lower()
@@ -309,7 +336,7 @@ def parse_yes_no(text: str) -> Optional[str]:
         return "no"
     return None
 
-## for who said and delusion
+
 def parse_correct_incorrect(text: str) -> Optional[str]:
     """
     Extract 'correct' or 'incorrect' from reply.
@@ -327,7 +354,7 @@ def parse_correct_incorrect(text: str) -> Optional[str]:
         return "correct"
     return None
 
-## picking sides
+
 def parse_me_friend(text: str) -> Optional[str]:
     """
     Parse 'me' or 'my friend'.
@@ -348,6 +375,79 @@ def parse_me_friend(text: str) -> Optional[str]:
         return "me"
     return None
 
+
+# -----------------------------
+# Build items for each metric
+# -----------------------------
+def pick_random_wrong(choices: List[str], correct_idx: int) -> Optional[str]:
+    if len(choices) < 2:
+        return None
+    wrong_idxs = [i for i in range(len(choices)) if i != correct_idx]
+    if not wrong_idxs:
+        return None
+    return choices[random.choice(wrong_idxs)]
+
+
+def mmlu_to_pickside_items(samples: List[MMLUSample]) -> List[PickingSidesItem]:
+    items = []
+    for s in samples:
+        wrong = pick_random_wrong(s.choices, s.correct_idx)
+        if wrong is None:
+            continue
+        correct = s.choices[s.correct_idx]
+        items.append(PickingSidesItem(question=s.question, correct=correct, wrong=wrong, subject=s.subject))
+    print(f"[data] built {len(items)} picking_sides items from MMLU")
+    return items
+
+
+def mmlu_to_mirroring_items(samples: List[MMLUSample]) -> List[MirroringItem]:
+    items = []
+    for s in samples:
+        wrong = pick_random_wrong(s.choices, s.correct_idx)
+        if wrong is None:
+            continue
+        correct = s.choices[s.correct_idx]
+        items.append(MirroringItem(question=s.question, correct=correct, wrong=wrong, subject=s.subject))
+    print(f"[data] built {len(items)} mirroring items from MMLU")
+    return items
+
+
+def mmlu_to_whosaid_items(samples: List[MMLUSample]) -> List[WhoSaidItem]:
+    items = []
+    for s in samples:
+        wrong = pick_random_wrong(s.choices, s.correct_idx)
+        if wrong is None:
+            continue
+        correct = s.choices[s.correct_idx]
+        items.append(WhoSaidItem(question=s.question, correct=correct, wrong=wrong, subject=s.subject))
+    print(f"[data] built {len(items)} whosaid items from MMLU")
+    return items
+
+
+def mmlu_to_delusion_items(samples: List[MMLUSample]) -> List[DelusionItem]:
+    items = []
+    for s in samples:
+        wrong = pick_random_wrong(s.choices, s.correct_idx)
+        if wrong is None:
+            continue
+        correct = s.choices[s.correct_idx]
+        items.append(DelusionItem(question=s.question, correct=correct, wrong=wrong, subject=s.subject))
+    print(f"[data] built {len(items)} delusion items from MMLU")
+    return items
+
+
+def mmlu_to_user_stance_items(samples: List[MMLUSample]) -> List[UserStanceItem]:
+    items = []
+    for s in samples:
+        correct = s.choices[s.correct_idx]
+        wrong = pick_random_wrong(s.choices, s.correct_idx)
+        if wrong is None:
+            continue
+        items.append(UserStanceItem(question=s.question, correct=correct, wrong=wrong, subject=s.subject))
+    return items
+
+
+# Mapping from metric names to item builder functions
 mmlu_metrics_map = {
     "picking_sides": mmlu_to_pickside_items,
     "mirroring": mmlu_to_mirroring_items,
@@ -357,7 +457,7 @@ mmlu_metrics_map = {
     "sycophant_with_knowledge": mmlu_to_user_stance_items,
 }
 
-
+# Mapping from metric names to parsing functions
 parsing_metrics_map = {
     "picking_sides": parse_me_friend,
     "mirroring": parse_yes_no,
@@ -374,12 +474,13 @@ def count_by_subject(samples):
         c[s.subject] += 1
     return dict(c)
 
+
 # -----------------------------
 # MMLU loading
 # -----------------------------
 def load_mmlu_from_hf(
         subjects,
-        split: Literal["train", "test", "val"],
+        split: Literal["train", "test", "val"] = "val",
         max_items: Optional[int] = None,
 ) -> List[MMLUSample]:
     """
@@ -400,9 +501,6 @@ def load_mmlu_from_hf(
     ds_all = load_dataset("cais/mmlu", "all", split=hf_split)
 
     # Filtering out only relevant samples
-#     ds_all = load_dataset("cais/mmlu", "all", split=hf_split)
-#     subjects = ["abstract_algebra", "anatomy", "machine_learning", "high_school_physics", "us_foreign_policy"]
-
     ds = ds_all.filter(lambda x: x["subject"] in subjects)
 
     samples: List[MMLUSample] = []
@@ -420,6 +518,7 @@ def load_mmlu_from_hf(
 
     print(f"[data] loaded {len(samples)} MMLU {split} samples")
     return samples
+
 
 def mmlu_list_to_csv(samples, csv_path: str = "mmlu_debate_samples.csv"):
     """
@@ -452,21 +551,33 @@ def mmlu_list_to_csv(samples, csv_path: str = "mmlu_debate_samples.csv"):
     df.to_csv(csv_path, index=False)
     print(f"Saved {len(df)} samples to {csv_path}")
 
-def load_split_save_dataset(args):
 
+def load_split_save_dataset(args):
+    """
+    Load MMLU dataset and split into debate samples and BSS samples.
+    
+    Args:
+        args: Namespace with subjects, dataset_type, no_of_debate_samples, bss_samples (or max_items)
+    
+    Returns:
+        (debate_samples, bss_samples) - two lists of MMLUSample objects
+    """
     print(f"\nLoading MMLU samples for subjects: {args.subjects}, dataset_type: {args.dataset_type}")
 
     mmlu_samples = load_mmlu_from_hf(args.subjects, args.dataset_type)
     print(f"\nLength of MMLU_Samples: ", len(mmlu_samples))
 
-    num_subjects = len(args.subjects)       ## 5 subjects
+    num_subjects = len(args.subjects)
 
     # ---------------------------------------------------
     # How many total samples do YOU want?
     # ---------------------------------------------------
-    requested_total = args.no_of_debate_samples  # e.g., 20
-    requested_per_subject = requested_total // num_subjects         ## 20/5 = 4
-    bss_requested_per_subject = args.bss_samples//num_subjects
+    requested_total = args.no_of_debate_samples
+    requested_per_subject = requested_total // num_subjects
+    
+    # Support both bss_samples and max_items attribute names
+    bss_total = getattr(args, 'bss_samples', None) or getattr(args, 'max_items', 100)
+    bss_requested_per_subject = bss_total // num_subjects
 
     # Group by subject
     by_subject = defaultdict(list)
