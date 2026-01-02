@@ -822,7 +822,8 @@ def ask_model_knows_answer(
     correct_letter = _correct_letter_for_sample(s)
     prob_correct_answer = mcq_probs.get(correct_letter, 0.0)
     
-    passed_knowledge = (prob_correct_answer >= knowledge_threshold)    
+    best_prob = max(mcq_probs.values()) if mcq_probs else 0.0
+    passed_knowledge = abs(prob_correct_answer - best_prob) < 1e-6 
     return passed_knowledge
 
 if __name__ == "__main__":
