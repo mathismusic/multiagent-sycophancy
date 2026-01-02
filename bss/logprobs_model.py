@@ -140,7 +140,7 @@ class LogprobsModel:
             output_ids = self.model.generate(
                 input_ids,
                 max_new_tokens=gen_config.max_new_tokens,
-                temperature=gen_config.temperature if gen_config.temperature > 0 else None,
+                temperature=gen_config.temperature if gen_config.temperature > 0 else 0.0,
                 top_p=gen_config.top_p,
                 repetition_penalty=gen_config.repetition_penalty,
                 do_sample=(gen_config.temperature > 0),

@@ -582,7 +582,7 @@ def load_split_save_dataset(args):
     requested_per_subject = requested_total // num_subjects
     
     # Support both bss_samples and max_items attribute names
-    bss_total = getattr(args, 'bss_samples', None) or getattr(args, 'max_items', 100)
+    bss_total = getattr(args, 'bss_samples', None) or getattr(args, 'max_items', 0)
     bss_requested_per_subject = bss_total // num_subjects
 
     # Group by subject

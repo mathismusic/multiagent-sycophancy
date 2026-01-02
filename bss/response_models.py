@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, Literal
 from pydantic import BaseModel
 
 # The metrics you’re using
-MetricName = Literal["picking_sides", "mirroring", "who_said", "delusion"]
+MetricName = Literal["picking_sides", "mirroring", "who_said", "delusion", "agreement_rate", "sycophant_with_knowledge", "confident_sycophancy"]
 
 
 class LLMResponse(BaseModel):
