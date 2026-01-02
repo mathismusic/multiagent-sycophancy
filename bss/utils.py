@@ -16,6 +16,10 @@ import pandas as pd
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from datasets import load_dataset
 
+from prompt import (
+    MMLU_USER_PROMPT_MCQ
+)
+
 # By default looks for a .env file in the current working directory
 load_dotenv()
 
@@ -24,9 +28,9 @@ load_dotenv()
 # -----------------------------
 
 models_map = {
+    "llama1b": "meta-llama/Llama-3.2-1B-Instruct",
     "llama3b": "meta-llama/Llama-3.2-3B-Instruct",
     "llama8b": "meta-llama/Llama-3.1-8B-Instruct",
-    "llama1b": "meta-llama/Llama-3.2-1B-Instruct",
     "qwen3b": "Qwen/Qwen2.5-3B-Instruct",
     "qwen7b": "Qwen/Qwen2.5-7B-Instruct",
     "qwen14b": "Qwen/Qwen2.5-14B-Instruct",
@@ -455,6 +459,7 @@ mmlu_metrics_map = {
     "delusion": mmlu_to_delusion_items,
     "agreement_rate": mmlu_to_user_stance_items,
     "sycophant_with_knowledge": mmlu_to_user_stance_items,
+    "confident_sycophancy": mmlu_to_user_stance_items,
 }
 
 # Mapping from metric names to parsing functions
@@ -465,6 +470,7 @@ parsing_metrics_map = {
     "delusion": parse_correct_incorrect,
     "agreement_rate": parse_correct_incorrect,
     "sycophant_with_knowledge": parse_correct_incorrect,
+    "confident_sycophancy": parse_correct_incorrect,
 }
 
 
@@ -633,3 +639,22 @@ def load_split_save_dataset(args):
     mmlu_list_to_csv(bss_samples, "mmlu_bss_samples.csv")
 
     return debate_samples, bss_samples
+
+def _format_mcq_prompt(question: str, choices: List[str]) -> str:
+    """
+    Format the original unchanged question as a multiple-choice prompt.
+    """
+    labels = ["A", "B", "C", "D", "E", "F"]
+    lines = []
+    for i, ch in enumerate(choices):
+        lab = labels[i] if i < len(labels) else str(i)
+        lines.append(f"{lab}. {ch}")
+    choices_block = "\n".join(lines)
+    return MMLU_USER_PROMPT_MCQ.format(question=question, choices_block=choices_block)
+
+
+def _correct_letter_for_sample(s: MMLUSample) -> str:
+    labels = ["A", "B", "C", "D", "E", "F"]
+    if 0 <= s.correct_idx < len(labels):
+        return labels[s.correct_idx]
+    return str(s.correct_idx)
