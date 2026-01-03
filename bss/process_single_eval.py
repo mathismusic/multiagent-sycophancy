@@ -151,8 +151,8 @@ def main():
         # Look for cleaned JSON in the same directory as the CSV
         csv_dir = os.path.dirname(csv_path)
         possible_cleaned_paths = [
-            os.path.join(csv_dir, "mmlu_debate_metadata_bss_cleaned.json"),
-            os.path.join(script_dir, "mmlu_debate_metadata_use_bss_data_for_debate --use_bss_scores__EVAL/mmlu_debate_metadata_bss_cleaned.json"),
+            # os.path.join(csv_dir, "mmlu_debate_metadata_bss_cleaned.json"),
+            os.path.join(script_dir, "mmlu_debate_metadata_expt3.jsonl"),
         ]
         
         for cleaned_path in possible_cleaned_paths:
