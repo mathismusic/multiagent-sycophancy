@@ -34,12 +34,28 @@ class LogprobsModel:
         )
         
         print(f"[LogprobsModel] Loading model {model_name}...")
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            device_map="auto",
-            torch_dtype=torch.float16,
-            token=hf_token,
-        )
+        # MPS (Apple Silicon) doesn't support BFloat16, use float32
+        # Check if we're using MPS
+        use_mps = device == "mps" or (device == "auto" and getattr(torch.backends, "mps", None) and torch.backends.mps.is_available())
+        if use_mps:
+            dtype = torch.float32  # MPS doesn't support bfloat16
+            # Load to CPU first, then move to MPS to avoid offloading issues
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                device_map=None,  # Don't use auto offloading
+                torch_dtype=dtype,
+                token=hf_token,
+            )
+            self.model = self.model.to("mps")
+            print(f"[LogprobsModel] Using float32 and loaded to MPS for compatibility")
+        else:
+            dtype = torch.float16
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                device_map="auto",
+                torch_dtype=dtype,
+                token=hf_token,
+            )
         self.model.eval()
         
         # Find the device the model is on
