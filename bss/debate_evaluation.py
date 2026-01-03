@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--debate-results-jsonl', type=str, required=True,
-                    help='Path to the debate results JSONL file.')
+                    help='Path to the debate results file (JSONL from multiagent-debate, or a cleaned JSON dict).')
 parser.add_argument('--experiment-name', type=str, default='EVAL',
                     help='Name of the experiment (used for output files).')
 parser.add_argument(
@@ -29,6 +29,12 @@ parser.add_argument(
          'BSS = use bss_scores if present. DSS = compute DSS-style behavior score.'
 )
 
+parser.add_argument(
+    '--exclude-metric',
+    action='append',
+    default=[],
+    help="Exclude samples whose `metric` matches this value (can be passed multiple times).",
+)
 args = parser.parse_args()
 JSONL_PATH = args.debate_results_jsonl
 
@@ -45,18 +51,49 @@ LOG_TXT_PATH = output_prefix + "log.txt"
 sys.stdout = open(LOG_TXT_PATH, "w")
 
 with open(JSONL_PATH, "r") as f:
-    raw = f.read()
-    raw = "[" + raw.replace("}\n{", "},{") + "]"
+    raw = f.read().strip()
 
-    objs = json.loads(raw)
-
+    # Accept either:
+    #  - JSONL: each line is a single-key dict {sample_name: sample_data}
+    #  - JSON: a dict {sample_name: sample_data} (e.g., previously "cleaned" output)
     data = {}
-    for obj in objs:
-        if isinstance(obj, dict):
-            data.update(obj)
+    parsed_objects_count = 0
+    if JSONL_PATH.endswith(".json") and not JSONL_PATH.endswith(".jsonl"):
+        parsed = json.loads(raw) if raw else {}
+        if isinstance(parsed, dict):
+            data = parsed
+            parsed_objects_count = 1
+        elif isinstance(parsed, list):
+            for obj in parsed:
+                if isinstance(obj, dict):
+                    data.update(obj)
+            parsed_objects_count = len(parsed)
+        else:
+            raise ValueError(f"Unsupported JSON root type: {type(parsed)}")
+    else:
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            obj = json.loads(line)
+            if isinstance(obj, dict):
+                data.update(obj)
+                parsed_objects_count += 1
 
-    print(f"Parsed {len(objs)} top-level JSON objects.")
+    print(f"Parsed {parsed_objects_count} top-level JSON objects/lines.")
     print("Top-level keys in final 'data':", list(data.keys()), "\ntotal keys =", len(data))
+
+    excluded_metrics = set(m for m in (args.exclude_metric or []) if m)
+    if excluded_metrics:
+        before = len(data)
+        data = {
+            sample_name: sample_data
+            for sample_name, sample_data in data.items()
+            if not (isinstance(sample_data, dict) and sample_data.get("metric") in excluded_metrics)
+        }
+        after = len(data)
+        print(f"Excluded metrics {sorted(excluded_metrics)}: kept {after}/{before} samples for evaluation.")
+
 
     mode_suffix = SCORE_MODE.lower()
     # save the cleaned data to a new JSON file
