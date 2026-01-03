@@ -111,19 +111,88 @@ def main():
                 count_info = f" ({result['_count_supported']}/{result['_count_total']} said 'correct')"
             print(f"  {model:15s}: {result['S_agree']:.4f}{count_info}")
 
-    # 2. Sycophant with Knowledge (using knowledge_flags from JSONL)
+    # 2. Sycophant with Knowledge (using knowledge_flags from JSONL or inference)
     print("\n[2] Sycophant with Knowledge (S_syco_k)...")
     if os.path.exists(jsonl_path):
-        print(f"  Using knowledge_flags from JSONL: {jsonl_path}")
+        print(f"  Using JSONL: {jsonl_path}")
     else:
         print(f"  Warning: JSONL not found at {jsonl_path}, computing without knowledge check")
+    
+    # Load MMLU samples if model_name is provided (for inference-based knowledge check)
+    mmlu_samples_for_syco = None
+    if args.model_name and os.path.exists(jsonl_path):
+        # Try to load MMLU samples (reuse the same logic as confident_sycophancy)
+        csv_dir = os.path.dirname(csv_path)
+        possible_cleaned_paths = [
+            os.path.join(script_dir, "mmlu_debate_metadata_expt3.jsonl"),
+        ]
+        
+        for cleaned_path in possible_cleaned_paths:
+            if os.path.exists(cleaned_path):
+                print(f"  Loading samples from cleaned JSON: {cleaned_path}")
+                mmlu_samples_for_syco = load_samples_from_cleaned_json(cleaned_path)
+                if mmlu_samples_for_syco:
+                    print(f"  Loaded {len(mmlu_samples_for_syco)} samples from cleaned JSON")
+                    break
+        
+        # If not found, try loading from HuggingFace
+        if mmlu_samples_for_syco is None:
+            try:
+                from utils import load_mmlu_from_hf, MMLUSample
+                # Extract sample questions from JSONL to match exact samples
+                sample_questions_map = {}  # question -> sample_index
+                if os.path.exists(jsonl_path):
+                    try:
+                        with open(jsonl_path, "r") as f:
+                            for line in f:
+                                line_data = json.loads(line)
+                                for sample_name, sample_data in line_data.items():
+                                    if sample_data.get("metric") == "sycophant_with_knowledge":
+                                        sample_obj = sample_data.get("sample", {})
+                                        question = sample_obj.get("question")
+                                        sample_idx = sample_data.get("sample_index")
+                                        if question and sample_idx is not None:
+                                            sample_questions_map[question] = sample_idx
+                    except Exception:
+                        pass
+                
+                if not sample_questions_map:
+                    print("  Warning: Could not extract sample questions from JSONL")
+                    mmlu_samples_for_syco = None
+                else:
+                    # Load MMLU samples and match by question text
+                    print(f"  Loading MMLU samples from HuggingFace (matching {len(sample_questions_map)} questions from JSONL)...")
+                    all_mmlu_samples = load_mmlu_from_hf(
+                        subjects=["elementary_mathematics", "professional_law", 
+                                 "machine_learning", "business_ethics", "high_school_biology"],
+                        split="test",
+                        max_items=None  # Load all to find matches
+                    )
+                    
+                    # Match samples by question and create ordered list by sample_index
+                    matched_samples = {}  # sample_index -> MMLUSample
+                    for mmlu_sample in all_mmlu_samples:
+                        if mmlu_sample.question in sample_questions_map:
+                            sample_idx = sample_questions_map[mmlu_sample.question]
+                            matched_samples[sample_idx] = mmlu_sample
+                    
+                    # Create ordered list (sorted by sample_index)
+                    max_idx = max(matched_samples.keys()) if matched_samples else -1
+                    mmlu_samples_for_syco = [matched_samples[i] for i in range(max_idx + 1) if i in matched_samples]
+                    print(f"  Matched {len(mmlu_samples_for_syco)} samples from JSONL")
+            except Exception as e:
+                print(f"  Warning: Could not load MMLU samples: {e}")
+                mmlu_samples_for_syco = None
+    
     for model in models:
         df_model = df[df["model"] == model]
+        # Use the same model for knowledge check inference
+        model_name_for_check = args.model_name if args.model_name else None
         result = compute_sycophant_with_knowledge_score(
             df_model=df_model,
             jsonl_path=jsonl_path if os.path.exists(jsonl_path) else None,
-            model_name=None,  # Not needed if using knowledge_flags
-            mmlu_samples=None  # Not needed if using knowledge_flags
+            model_name=model_name_for_check,  # Use provided model_name for inference if available
+            mmlu_samples=mmlu_samples_for_syco  # Use loaded samples for inference if available
         )
         if "S_syco_k" in result and not np.isnan(result["S_syco_k"]):
             results.append({
@@ -131,7 +200,13 @@ def main():
                 "metric": "sycophant_with_knowledge",
                 "score": result["S_syco_k"]
             })
-            note = " (using knowledge_flags)" if os.path.exists(jsonl_path) else " (no knowledge check)"
+            # Determine note based on whether knowledge check was performed
+            if model_name_for_check and mmlu_samples_for_syco:
+                note = " (with inference-based knowledge check)"
+            elif os.path.exists(jsonl_path):
+                note = " (using knowledge_flags)" 
+            else:
+                note = " (no knowledge check)"
             count_info = ""
             if "_count_supported" in result and "_count_eligible" in result:
                 count_info = f" ({result['_count_supported']}/{result['_count_eligible']} eligible said 'correct'"
