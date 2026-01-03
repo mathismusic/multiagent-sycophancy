@@ -2,7 +2,8 @@ from process_eval_results import (
     overall_from_csv,
     compute_agreement_rate_score,
     compute_sycophant_with_knowledge_score,
-    compute_confident_sycophancy_score
+    compute_confident_sycophancy_score,
+    compute_picking_sides_score
 )
 import os
 import pandas as pd
@@ -113,6 +114,8 @@ def main():
                         help="Device for inference (default: auto)")
     parser.add_argument("--title", type=str, default="MMLU Debate Results",
                         help="Title for output table")
+    parser.add_argument("--output-json", type=str, default=None,
+                        help="Path to save results JSON file (default: auto-generate from csv-path)")
     
     args = parser.parse_args()
     
@@ -149,26 +152,53 @@ def main():
     df.columns = [c.strip() for c in df.columns]
 
     models = sorted(df["model"].unique())
-    results = []
+    results = []  # For display/table
+    results_dict = {
+        "picking_sides": {},
+        "agreement_rate": {},
+        "sycophant_with_knowledge": {},
+        "confident_sycophancy": {}
+    }  # For JSON output
 
-    # 1. Agreement Rate
-    print("\n[1] Agreement Rate (S_agree)...")
+    # 1. Picking Sides
+    print("\n[1] Picking Sides (S_pick)...")
+    for model in models:
+        df_model = df[df["model"] == model]
+        result = compute_picking_sides_score(df_model)
+        if "S_pick" in result and not np.isnan(result["S_pick"]):
+            score = result["S_pick"]
+            results.append({
+                "model": model,
+                "metric": "picking_sides",
+                "score": score
+            })
+            results_dict["picking_sides"][model] = float(score)
+            ratio_info = ""
+            if "pick_ratio_c" in result and "pick_ratio_w" in result:
+                if not np.isnan(result["pick_ratio_c"]) and not np.isnan(result["pick_ratio_w"]):
+                    ratio_info = f" (ratio_correct={result['pick_ratio_c']:.3f}, ratio_wrong={result['pick_ratio_w']:.3f})"
+            print(f"  {model:15s}: {score:.4f}{ratio_info}")
+
+    # 2. Agreement Rate
+    print("\n[2] Agreement Rate (S_agree)...")
     for model in models:
         df_model = df[df["model"] == model]
         result = compute_agreement_rate_score(df_model)
         if "S_agree" in result and not np.isnan(result["S_agree"]):
+            score = result["S_agree"]
             results.append({
                 "model": model,
                 "metric": "agreement_rate",
-                "score": result["S_agree"]
+                "score": score
             })
+            results_dict["agreement_rate"][model] = float(score)
             count_info = ""
             if "_count_supported" in result and "_count_total" in result:
                 count_info = f" ({result['_count_supported']}/{result['_count_total']} said 'correct')"
-            print(f"  {model:15s}: {result['S_agree']:.4f}{count_info}")
+            print(f"  {model:15s}: {score:.4f}{count_info}")
 
-    # 2. Sycophant with Knowledge (check knowledge for each model separately)
-    print("\n[2] Sycophant with Knowledge (S_syco_k)...")
+    # 3. Sycophant with Knowledge (check knowledge for each model separately)
+    print("\n[3] Sycophant with Knowledge (S_syco_k)...")
     if os.path.exists(jsonl_path):
         print(f"  Using JSONL: {jsonl_path}")
         # Load MMLU samples
@@ -189,6 +219,7 @@ def main():
                             "metric": "sycophant_with_knowledge",
                             "score": score
                         })
+                        results_dict["sycophant_with_knowledge"][model] = float(score)
                         print(f"  {model:15s}: {score:.4f} (with inference-based knowledge check)")
             except Exception as e:
                 print(f"  Error computing sycophant_with_knowledge: {e}")
@@ -199,8 +230,8 @@ def main():
     else:
         print(f"  Warning: JSONL not found at {jsonl_path}, skipping knowledge check")
 
-    # 3. Confident Sycophancy (check knowledge for each model separately)
-    print("\n[3] Confident Sycophancy...")
+    # 4. Confident Sycophancy (check knowledge for each model separately)
+    print("\n[4] Confident Sycophancy...")
     if os.path.exists(jsonl_path):
         # Load MMLU samples (same function as sycophant_with_knowledge)
         mmlu_samples = load_mmlu_samples_for_metric(jsonl_path, "confident_sycophancy", script_dir)
@@ -219,6 +250,7 @@ def main():
                             "metric": "confident_sycophancy",
                             "score": score
                         })
+                        results_dict["confident_sycophancy"][model] = float(score)
                         print(f"  {model:15s}: {score:.4f}")
             except Exception as e:
                 print(f"  Error computing confident sycophancy: {e}")
@@ -243,6 +275,24 @@ def main():
         print(pivot.to_string())
     else:
         print("\nNo new metrics computed.")
+    
+    # Save results to JSON file
+    if any(results_dict.values()):  # If any metric has results
+        # Determine output path
+        if args.output_json is None:
+            # Auto-generate from csv_path
+            csv_basename = os.path.basename(csv_path).replace(".csv", "")
+            output_json = os.path.join(script_dir, f"{csv_basename}_metrics.json")
+        else:
+            output_json = args.output_json if os.path.isabs(args.output_json) else os.path.join(script_dir, args.output_json)
+        
+        # Remove empty metrics from output
+        results_dict_clean = {k: v for k, v in results_dict.items() if v}
+        
+        # Save JSON file
+        with open(output_json, "w") as f:
+            json.dump(results_dict_clean, f, indent=2)
+        print(f"\n[Saved] Results saved to: {output_json}")
 
 if __name__ == "__main__":
     main()
