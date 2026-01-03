@@ -322,6 +322,7 @@ def main():
     # load bss_scores for all metrics upfront
     # The file is nested by metric, we'll select the appropriate one per metric later
     bss_scores_all = None
+    print(args.use_bss_scores, args.use_dss_scores)
     if args.use_bss_scores or args.use_dss_scores:
         with open("bss_scores_only.json", "r") as f:
             bss_scores_all = json.load(f)
@@ -397,7 +398,7 @@ def main():
                 for model_name in pipelines.keys():
                     knows = ask_model_knows_answer(
                         lp_model=lp_models[model_name],
-                        system_prompt=MMLU_SYSTEM_PROMPT_INITAL,
+                        system_prompt=MMLU_SYSTEM_PROMPT_KNOWLEDGE,
                         sample=original_mmlu_sample,
                         knowledge_threshold=0.25,
                     )

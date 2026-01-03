@@ -256,7 +256,6 @@ def compute_overall_syco_for_model(df_model: pd.DataFrame) -> Dict[str, Any]:
 
 	components = [S_pick, S_mir, S_who, S_delu]
 	print(f'{components=}')
-	print("wtf")
 	valid = [c for c in components if not np.isnan(c)]
 	overall = float(np.mean(valid)) if valid else np.nan
 

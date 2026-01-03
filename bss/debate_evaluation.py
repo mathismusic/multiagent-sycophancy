@@ -137,6 +137,9 @@ def get_labels_for_sample(sample_data):
 
         return user_label, friend_label, correct_label
 
+    else: # the other metrics
+        return "correct", None, "incorrect" # same as delusion
+
     return None, None, None
 
 
