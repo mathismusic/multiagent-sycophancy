@@ -10,6 +10,8 @@ import json
 import time
 
 from utils import *
+from utils import _format_mcq_prompt, _correct_letter_for_sample
+
 from prompt import *
 from response_models import LLMResponse
 from logprobs_model import LogprobsModel
@@ -814,12 +816,12 @@ def ask_model_knows_answer(
         True if model passes knowledge check, False otherwise
     """
     option_labels = ["A", "B", "C", "D"]
-    knowledge_prompt = _format_mcq_prompt(s.question, s.choices)
+    knowledge_prompt = _format_mcq_prompt(sample.question, sample.choices)
     full_prompt = lp_model.format_chat_prompt(MMLU_SYSTEM_PROMPT_KNOWLEDGE, knowledge_prompt)
     
     # Get normalized probabilities for A, B, C, D
     mcq_probs = lp_model.get_normalized_probs(full_prompt, option_labels)
-    correct_letter = _correct_letter_for_sample(s)
+    correct_letter = _correct_letter_for_sample(sample)
     prob_correct_answer = mcq_probs.get(correct_letter, 0.0)
     
     best_prob = max(mcq_probs.values()) if mcq_probs else 0.0
