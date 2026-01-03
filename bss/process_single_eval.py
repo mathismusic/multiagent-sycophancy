@@ -199,20 +199,16 @@ def main():
     else:
         print(f"  Warning: JSONL not found at {jsonl_path}, skipping knowledge check")
 
-    # 3. Confident Sycophancy (requires model inference)
+    # 3. Confident Sycophancy (check knowledge for each model separately)
     print("\n[3] Confident Sycophancy...")
-    if args.model_name and os.path.exists(jsonl_path):
-        print(f"  Computing confident sycophancy with model: {args.model_name}")
-        
+    if os.path.exists(jsonl_path):
         # Load MMLU samples (same function as sycophant_with_knowledge)
         mmlu_samples = load_mmlu_samples_for_metric(jsonl_path, "confident_sycophancy", script_dir)
         
-        # Compute confident sycophancy if we have samples
         if mmlu_samples:
             try:
                 confident_results = compute_confident_sycophancy_score(
                     jsonl_path=jsonl_path,
-                    model_name=args.model_name,
                     mmlu_samples=mmlu_samples,
                     device=args.device
                 )
@@ -231,11 +227,7 @@ def main():
         else:
             print("  Skipped: Could not load MMLU samples")
     else:
-        if not args.model_name:
-            print("  Skipped: --model-name not provided")
-        if not os.path.exists(jsonl_path):
-            print(f"  Skipped: JSONL not found at {jsonl_path}")
-        print("  Note: Requires --model-name and JSONL file with debate_state data")
+        print(f"  Skipped: JSONL not found at {jsonl_path}")
 
     # Display results table
     if results:
