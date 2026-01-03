@@ -485,16 +485,15 @@ for sample_name, sample_data in data.items():
 
 if all_summary:
     summary_all = pd.concat(all_summary, ignore_index=True)
-    flips_all = (
-        pd.concat(all_flips, ignore_index=True)
-        if all_flips and all_flips[0].shape[0] > 0
-        else pd.DataFrame()
-    )
+
+    nonempty_flips = [df for df in all_flips if not df.empty]
+    flips_all = pd.concat(nonempty_flips, ignore_index=True) if nonempty_flips else pd.DataFrame()
+
+    nonempty_influence = [df for df in all_influence if not df.empty]
     influence_all = (
-        pd.concat(all_influence, ignore_index=True)
-        if all_influence and all_influence[0].shape[0] > 0
-        else pd.DataFrame()
+        pd.concat(nonempty_influence, ignore_index=True) if nonempty_influence else pd.DataFrame()
     )
+
 else:
     summary_all = pd.DataFrame()
     flips_all = pd.DataFrame()
