@@ -729,7 +729,7 @@ else:
 if not influence_all.empty:
     influence_graph_df = (
     influence_all
-    .groupby(["subject", "source_model", "target_model"])["count"]
+    .groupby(["source_model", "target_model"])["count"]
     .sum()
     .reset_index()
     .rename(columns={"count": "total_influence"})
