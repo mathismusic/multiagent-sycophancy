@@ -1,5 +1,3 @@
-# Amruta's code for score computation pipeline
-# modified to allow for gemini use and ncsa open model use
 # usage: (after creating an environment with the requirements in requirements.txt)
 # python pipeline.py --backend [hf/gemini/] --model [model_name] --max-items [num_datapoints]
 # e.g.
