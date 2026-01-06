@@ -63,7 +63,7 @@ class GenConfig:
     top_p: float = 1.0
     repetition_penalty: float = 1.0
     seed: int = 42
-    course_name: str = "syco"  # for UIUC adapter
+    course_name: str = "syco"
 
 
 # -----------------------------
@@ -179,18 +179,6 @@ def build_textgen_pipeline(model, device: str):
 
             # With device_map="auto", the model is already on GPU, use device=None for pipeline
             pipe = pipeline("text-generation", model=mdl, tokenizer=tok, pad_token_id=tok.eos_token_id)
-        case "gemini":
-            import adapters
-            gemini_api_key = os.environ.get("GEMINI_API_KEY")
-            pipe = adapters.GeminiAdapter(api_key=gemini_api_key, model_name=model_name)
-        case "uiuc":
-            import adapters
-            uc_key = os.environ.get("UC_KEY")
-            pipe = adapters.UIUCAdapter(
-                model_name=model_name,
-                uc_key=uc_key,
-                course_name="CS-546",
-            )
     
     print("[load] pipeline ready")
     return pipe

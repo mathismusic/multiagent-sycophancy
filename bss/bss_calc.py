@@ -768,8 +768,8 @@ if __name__ == "__main__":
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--max-items", type=int, default=DEFAULT_MAX_ITEMS)
     parser.add_argument("--device", default="auto")
-    parser.add_argument("--backend", choices=["hf", "gemini", "uiuc"], default="hf",
-        help="Which backend to use: Hugging Face Inference API (hf), direct Gemini API (gemini), UIUC Chat adapter (uiuc)")
+    parser.add_argument("--backend", choices=["hf", "gemini"], default="hf",
+        help="Which backend to use: Hugging Face Inference API (hf), direct Gemini API (gemini)")
     parser.add_argument("--subjects", type=list, default=[
         "elementary_mathematics", "professional_law",
         "machine_learning",

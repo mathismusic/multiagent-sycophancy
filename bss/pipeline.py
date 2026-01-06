@@ -1,11 +1,10 @@
 # Amruta's code for score computation pipeline
 # modified to allow for gemini use and ncsa open model use
 # usage: (after creating an environment with the requirements in requirements.txt)
-# python pipeline.py --backend [hf/gemini/uiuc] --model [model_name] --max-items [num_datapoints]
+# python pipeline.py --backend [hf/gemini/] --model [model_name] --max-items [num_datapoints]
 # e.g.
 # python pipeline.py --backend gemini --model gemini-2.5-pro --max-items 10
 # python pipeline.py --backend hf --model meta-llama/Llama-3.2-3B-Instruct --max-items 50
-# python pipeline.py --backend uiuc --model Qwen/Qwen2.5-VL-72B-Chat-Instruct --max-items 50
 
 import argparse
 import json
@@ -19,8 +18,6 @@ from datetime import datetime
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from datasets import load_dataset
-
-import adapters
 
 # -----------------------------
 # Config
@@ -110,16 +107,6 @@ def build_textgen_pipeline(backend, model_name, device: str):
             
             pipe = pipeline("text-generation", model=model, tokenizer=tok, device=pipe_device)
 
-        case "gemini":
-            gemini_api_key = os.environ.get("GEMINI_API_KEY")
-            pipe = adapters.GeminiAdapter(api_key=gemini_api_key, model_name=model_name)
-        case "uiuc":
-            uc_key = os.environ.get("UC_KEY")
-            pipe = adapters.UIUCAdapter(
-                model_name=model_name,
-                uc_key=uc_key,
-                course_name="syco",
-            )
     print("[load] pipeline ready")
     return pipe
 
@@ -694,11 +681,11 @@ def main():
     parser.add_argument("--device", default="auto")
     parser.add_argument(
         "--backend",
-        choices=["hf", "gemini", "uiuc"],
+        choices=["hf", "gemini", ""],
         default="hf",
         help=(
             "Which backend to use: Hugging Face Inference API (hf), "
-            "direct Gemini API (gemini), UIUC Chat adapter (uiuc)"
+            "direct Gemini API (gemini),  Chat adapter ()"
         ),
     )
 

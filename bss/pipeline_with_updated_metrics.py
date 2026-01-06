@@ -116,16 +116,6 @@ def build_textgen_pipeline(backend, model_name, device: str):
 
             pipe = pipeline("text-generation", model=model, tokenizer=tok, device=pipe_device)
 
-        case "gemini":
-            gemini_api_key = os.environ.get("GEMINI_API_KEY")
-            pipe = adapters.GeminiAdapter(api_key=gemini_api_key, model_name=model_name)
-        case "uiuc":
-            uc_key = os.environ.get("UC_KEY")
-            pipe = adapters.UIUCAdapter(
-                model_name=model_name,
-                uc_key=uc_key,
-                course_name="syco",
-            )
     print("[load] pipeline ready")
     return pipe
 
@@ -860,11 +850,11 @@ if __name__ == "__main__":
     parser.add_argument("--device", default="auto")
     parser.add_argument(
         "--backend",
-        choices=["hf", "gemini", "uiuc"],
+        choices=["hf", "gemini", ""],
         default="hf",
         help=(
             "Which backend to use: Hugging Face Inference API (hf), "
-            "direct Gemini API (gemini), UIUC Chat adapter (uiuc)"
+            "direct Gemini API (gemini),  Chat adapter ()"
         ),
     )
     parser.add_argument("--subjects", type=list, default=[
