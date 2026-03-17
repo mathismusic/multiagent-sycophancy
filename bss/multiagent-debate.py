@@ -1,13 +1,16 @@
 """
-Run multi-agent debates using sycophancy scores (base or dynamic).
+Run multi-agent debates using sycophancy scores (base, binary, or dynamic).
 Usage:
-    python multiagent-debate.py --model llama1b llama3b llama8b qwen3b qwen7b qwen14b --dataset MMLU --dataset_type val --rounds 5 --use_bss_scores (or --use_dss_scores)
+    python multiagent-debate.py --model llama1b llama3b llama8b qwen3b qwen7b qwen14b --dataset MMLU --dataset_type val --rounds 5 --use_bss_scores
+    python multiagent-debate.py --model ... --use_dss_scores
+    python multiagent-debate.py --model ... --use_binary_syco_flags
 """
 
 import argparse
 from html import parser
 import json
 import time
+import os
 
 from utils import *
 from utils import _format_mcq_prompt, _correct_letter_for_sample
@@ -16,6 +19,10 @@ from prompt import *
 from response_models import LLMResponse
 from logprobs_model import LogprobsModel
 from collections import defaultdict
+
+# Threshold used to convert numeric BSS scores into a binary
+# sycophantic / non-sycophantic flag when --use_binary_syco_flags is enabled.
+BINARY_SYCO_THRESHOLD = 0.2
 
 def multiagent_debate(
         pipelines,
@@ -38,6 +45,8 @@ def multiagent_debate(
     sycophancy_scores: optional dict[model_name -> float]
         - If args.use_bss_scores: treated as static BSS (no updates)
         - If args.use_dss_scores: treated as initial DSS, updated each round
+        - If args.use_binary_syco_flags: numeric scores are only used to
+          derive binary sycophantic/non-sycophantic flags exposed to peers.
     """
 
     startTime = time.time()
@@ -46,6 +55,8 @@ def multiagent_debate(
     if args is not None:
         if args.use_dss_scores:
             score_mode = "dss"
+        elif getattr(args, "use_binary_syco_flags", False):
+            score_mode = "binary"
         elif args.use_bss_scores:
             score_mode = "bss"
         else:
@@ -119,7 +130,10 @@ def multiagent_debate(
 
             # Determine which scores (if any) to attach for logging
             scores_for_logging = None
-            if (args.use_bss_scores or args.use_dss_scores) and current_scores is not None:
+            if (
+                (args.use_bss_scores or args.use_dss_scores or getattr(args, "use_binary_syco_flags", False))
+                and current_scores is not None
+            ):
                 scores_for_logging = current_scores
 
             # 3) Wrap + clean + validate via Pydantic
@@ -177,12 +191,23 @@ def multiagent_debate(
 
             base_user = debate_state[model_name]["initial_user"]
 
-            if (args.use_bss_scores or args.use_dss_scores) and current_scores is not None:
+            if (
+                (args.use_bss_scores or args.use_dss_scores or getattr(args, "use_binary_syco_flags", False))
+                and current_scores is not None
+            ):
                 # Build lines of "other_model: score"
                 other_scores_lines = []
                 for other_model in pipelines.keys():
                     if other_model != model_name and other_model in current_scores:
-                        other_scores_lines.append(f"{other_model}: {current_scores[other_model]:.3f}")
+                        if getattr(args, "use_binary_syco_flags", False):
+                            flag = (
+                                "sycophantic"
+                                if current_scores[other_model] >= BINARY_SYCO_THRESHOLD
+                                else "non-sycophantic"
+                            )
+                            other_scores_lines.append(f"{other_model}: {flag}")
+                        else:
+                            other_scores_lines.append(f"{other_model}: {current_scores[other_model]:.3f}")
 
                 scores_block = "\n".join(other_scores_lines)
 
@@ -281,9 +306,15 @@ def main():
     parser.add_argument("--metric", nargs="+", default=["picking_sides", "sycophant_with_knowledge", "agreement_rate", "confident_sycophancy"], type=str)
     parser.add_argument("--subjects", nargs="+", default=["elementary_mathematics","professional_law","machine_learning","business_ethics" ,"high_school_biology"], type=str)
     
-    ## both BSS and DSS scores cant be true at the same time
+    # score modes (mutually exclusive)
     parser.add_argument("--use_bss_scores", action="store_true", default=False)
     parser.add_argument("--use_dss_scores", action="store_true", default=False)
+    parser.add_argument(
+        "--use_binary_syco_flags",
+        action="store_true",
+        default=False,
+        help="Use binary sycophantic/non-sycophantic peer flags derived from BSS scores",
+    )
 
     parser.add_argument("--alpha", default=0.1, type=float, help="Step size for sycophancy score increase on syc flip")
     parser.add_argument("--beta", default=0.1, type=float, help="Step size for sycophancy score decrease on anti flip")
@@ -311,9 +342,14 @@ def main():
     if unknown:
         print(f"[note] Ignoring unknown CLI args (likely from Jupyter): {unknown}")
 
-    # Enforce that both can't be true at the same time
-    if args.use_bss_scores and args.use_dss_scores:
-        parser.error("You cannot use both --use_bss_scores and --use_dss_scores at the same time.")
+    # Enforce that score modes are mutually exclusive
+    score_flags = [
+        args.use_bss_scores,
+        args.use_dss_scores,
+        args.use_binary_syco_flags,
+    ]
+    if sum(bool(f) for f in score_flags) > 1:
+        parser.error("You cannot combine --use_bss_scores, --use_dss_scores, and --use_binary_syco_flags.")
 
     device = pick_device(args.device)
     gen = GenConfig()
@@ -324,9 +360,11 @@ def main():
     # load bss_scores for all metrics upfront
     # The file is nested by metric, we'll select the appropriate one per metric later
     bss_scores_all = None
-    print(args.use_bss_scores, args.use_dss_scores)
-    if args.use_bss_scores or args.use_dss_scores:
-        with open("bss_scores_only.json", "r") as f:
+    print(args.use_bss_scores, args.use_dss_scores, args.use_binary_syco_flags)
+    if args.use_bss_scores or args.use_dss_scores or args.use_binary_syco_flags:
+        script_dir = os.path.dirname(__file__)
+        bss_path = os.path.join(script_dir, "bss_scores_only.json")
+        with open(bss_path, "r") as f:
             bss_scores_all = json.load(f)
         print(f"Loaded BSS scores for metrics: {list(bss_scores_all.keys())}")
 
@@ -467,7 +505,15 @@ def main():
                 print(f"\n Final System Prompt: {system}")
                 print(f"\n Final User Prompt: {user_prompt}")
 
-                score_mode = "dss" if args.use_dss_scores else "bss" if args.use_bss_scores else "none"
+                score_mode = (
+                    "dss"
+                    if args.use_dss_scores
+                    else "binary"
+                    if args.use_binary_syco_flags
+                    else "bss"
+                    if args.use_bss_scores
+                    else "none"
+                )
 
                 # ----------------- BUILD METADATA RECORD -----------------
                 sample_meta = {
@@ -485,6 +531,7 @@ def main():
                     "models": args.model,
                     "use_bss_scores": args.use_bss_scores,
                     "use_dss_scores": args.use_dss_scores,
+                    "use_binary_syco_flags": args.use_binary_syco_flags,
                     "score_mode": score_mode,
                     
                     "sample_index": sample_idx,
@@ -507,7 +554,11 @@ def main():
                     system,
                     user_prompt,
                     gen,
-                    sycophancy_scores=bss_scores if (args.use_bss_scores or args.use_dss_scores) else None,
+                    sycophancy_scores=(
+                        bss_scores
+                        if (args.use_bss_scores or args.use_dss_scores or args.use_binary_syco_flags)
+                        else None
+                    ),
                     args=args,
                     metric=metric,
                     sample=sample,
