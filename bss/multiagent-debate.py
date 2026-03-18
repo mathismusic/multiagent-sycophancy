@@ -20,10 +20,6 @@ from response_models import LLMResponse
 from logprobs_model import LogprobsModel
 from collections import defaultdict
 
-# Threshold used to convert numeric BSS scores into a binary
-# sycophantic / non-sycophantic flag when --use_binary_syco_flags is enabled.
-BINARY_SYCO_THRESHOLD = 0.2
-
 def multiagent_debate(
         pipelines,
         system_prompt,
@@ -45,8 +41,8 @@ def multiagent_debate(
     sycophancy_scores: optional dict[model_name -> float]
         - If args.use_bss_scores: treated as static BSS (no updates)
         - If args.use_dss_scores: treated as initial DSS, updated each round
-        - If args.use_binary_syco_flags: numeric scores are only used to
-          derive binary sycophantic/non-sycophantic flags exposed to peers.
+        - If args.use_binary_syco_flags: peers are labeled only as
+          \"sycophantic\" / \"non-sycophantic\" (no numeric scores shown).
     """
 
     startTime = time.time()
@@ -195,29 +191,32 @@ def multiagent_debate(
                 (args.use_bss_scores or args.use_dss_scores or getattr(args, "use_binary_syco_flags", False))
                 and current_scores is not None
             ):
-                # Build lines of "other_model: score"
+                # Build lines of peer sycophancy information
                 other_scores_lines = []
                 for other_model in pipelines.keys():
                     if other_model != model_name and other_model in current_scores:
-                        if getattr(args, "use_binary_syco_flags", False):
-                            flag = (
-                                "sycophantic"
-                                if current_scores[other_model] >= BINARY_SYCO_THRESHOLD
-                                else "non-sycophantic"
-                            )
-                            other_scores_lines.append(f"{other_model}: {flag}")
-                        else:
-                            other_scores_lines.append(f"{other_model}: {current_scores[other_model]:.3f}")
+                        other_scores_lines.append(f"{other_model}: {current_scores[other_model]}")
 
                 scores_block = "\n".join(other_scores_lines)
 
                 print(f"Current sycophancy scores at round {round_num + 1}: {current_scores}")
                 print(f"Scores block for {model_name} at round {round_num + 1}:\n{scores_block}")
 
-                # REPLACE the user prompt with base + one debate block
+                # REPLACE the user prompt with base + one debate block.
+                # For the binary ablation, swap in a binary-specific warning
+                # string, but keep the underlying template the same.
+                prompt_with_scores = MMLU[metric.upper()][2]
+                if getattr(args, "use_binary_syco_flags", False):
+                    from prompt import _SYCO_WARNING_GENERAL, _SYCO_WARNING_BINARY
+
+                    prompt_with_scores = prompt_with_scores.replace(
+                        _SYCO_WARNING_GENERAL,
+                        _SYCO_WARNING_BINARY,
+                    )
+
                 debate_state[model_name]["user"] = (
                     base_user
-                    + MMLU[metric.upper()][2].format(
+                    + prompt_with_scores.format(
                         other_responses_block=other_responses,
                         scores_block=scores_block,
                     )
@@ -411,9 +410,34 @@ def main():
 
         # Select the BSS scores for this specific metric
         bss_scores = None
+        binary_flags = None
         if bss_scores_all is not None and metric in bss_scores_all:
             bss_scores = bss_scores_all[metric]
             print(f"BSS Scores for {metric}: {bss_scores}")
+
+            # For the binary-flag ablation, convert per-metric BSS scores
+            # into relative \"sycophantic\" / \"non-sycophantic\" labels:
+            # among the participating models, the higher half are labeled
+            # sycophantic, the lower half non-sycophantic (median split).
+            if args.use_binary_syco_flags:
+                # Restrict to models actually in this run and with BSS scores
+                filtered = [(m, bss_scores[m]) for m in args.model if m in bss_scores]
+                if len(filtered) >= 2:
+                    sorted_models = sorted(filtered, key=lambda x: x[1])
+                    k = len(sorted_models) // 2  # top half vs bottom half
+                    bottom = {m for (m, _) in sorted_models[:k]}
+                    top = {m for (m, _) in sorted_models[-k:]} if k > 0 else set()
+
+                    binary_flags = {}
+                    for m, _ in sorted_models:
+                        if m in top:
+                            binary_flags[m] = "sycophantic"
+                        else:
+                            binary_flags[m] = "non-sycophantic"
+
+                    print(f"Binary sycophancy flags for {metric}: {binary_flags}")
+                else:
+                    print(f"[warning] Not enough models with BSS scores for metric '{metric}' to define binary flags")
         elif bss_scores_all is not None:
             print(f"[warning] No BSS scores found for metric '{metric}', using None")
 
@@ -549,16 +573,20 @@ def main():
 
                 ##############################################################################
                 # Multi-agent debate
+                # Decide which scores/flags to pass into the debate
+                if args.use_binary_syco_flags:
+                    syco_payload = binary_flags
+                elif args.use_bss_scores or args.use_dss_scores:
+                    syco_payload = bss_scores
+                else:
+                    syco_payload = None
+
                 debate_state, debate_log, updated_scores = multiagent_debate(
                     pipelines,
                     system,
                     user_prompt,
                     gen,
-                    sycophancy_scores=(
-                        bss_scores
-                        if (args.use_bss_scores or args.use_dss_scores or args.use_binary_syco_flags)
-                        else None
-                    ),
+                    sycophancy_scores=syco_payload,
                     args=args,
                     metric=metric,
                     sample=sample,
