@@ -624,6 +624,7 @@ def main():
     print(f"\nDebated on Total Prompts: {len(all_prompts)}")
     print(f"\nTotal examples recorded: {len(all_logs)}")
 
+    os.makedirs("eval_results", exist_ok=True)
     with open("eval_results/mmlu_debate_metadata.jsonl", "w") as f:
         for rec in all_logs:
             f.write(json.dumps(rec) + "\n")
