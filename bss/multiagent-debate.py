@@ -195,7 +195,16 @@ def multiagent_debate(
                 other_scores_lines = []
                 for other_model in pipelines.keys():
                     if other_model != model_name and other_model in current_scores:
-                        other_scores_lines.append(f"{other_model}: {current_scores[other_model]}")
+                        # For the binary ablation, display only relative
+                        # sycophantic / non-sycophantic labels; otherwise
+                        # show the numeric scores.
+                        if getattr(args, "use_binary_syco_flags", False):
+                            flags_by_metric = getattr(args, "binary_flags_by_metric", {})
+                            flags = flags_by_metric.get(metric, {})
+                            flag = flags.get(other_model, "non-sycophantic")
+                            other_scores_lines.append(f"{other_model}: {flag}")
+                        else:
+                            other_scores_lines.append(f"{other_model}: {current_scores[other_model]:.3f}")
 
                 scores_block = "\n".join(other_scores_lines)
 
@@ -436,6 +445,11 @@ def main():
                             binary_flags[m] = "non-sycophantic"
 
                     print(f"Binary sycophancy flags for {metric}: {binary_flags}")
+
+                    # Stash flags on args so multiagent_debate can access
+                    if not hasattr(args, "binary_flags_by_metric"):
+                        args.binary_flags_by_metric = {}
+                    args.binary_flags_by_metric[metric] = binary_flags
                 else:
                     print(f"[warning] Not enough models with BSS scores for metric '{metric}' to define binary flags")
         elif bss_scores_all is not None:
@@ -573,10 +587,10 @@ def main():
 
                 ##############################################################################
                 # Multi-agent debate
-                # Decide which scores/flags to pass into the debate
-                if args.use_binary_syco_flags:
-                    syco_payload = binary_flags
-                elif args.use_bss_scores or args.use_dss_scores:
+                # Decide which scores to pass into the debate.  For the
+                # binary ablation we still pass the numeric BSS scores for
+                # logging; only the *display* in the prompt is binary.
+                if args.use_bss_scores or args.use_dss_scores or args.use_binary_syco_flags:
                     syco_payload = bss_scores
                 else:
                     syco_payload = None
