@@ -323,6 +323,12 @@ def main():
         default=False,
         help="Use binary sycophantic/non-sycophantic peer flags derived from BSS scores",
     )
+    parser.add_argument(
+        "--bss-scores-json",
+        type=str,
+        default="bss_scores_only.json",
+        help="Per-metric BSS JSON (path relative to this script, or absolute)",
+    )
 
     parser.add_argument("--alpha", default=0.1, type=float, help="Step size for sycophancy score increase on syc flip")
     parser.add_argument("--beta", default=0.1, type=float, help="Step size for sycophancy score decrease on anti flip")
@@ -371,10 +377,12 @@ def main():
     print(args.use_bss_scores, args.use_dss_scores, args.use_binary_syco_flags)
     if args.use_bss_scores or args.use_dss_scores or args.use_binary_syco_flags:
         script_dir = os.path.dirname(__file__)
-        bss_path = os.path.join(script_dir, "bss_scores_only.json")
+        bss_path = args.bss_scores_json
+        if not os.path.isabs(bss_path):
+            bss_path = os.path.join(script_dir, bss_path)
         with open(bss_path, "r") as f:
             bss_scores_all = json.load(f)
-        print(f"Loaded BSS scores for metrics: {list(bss_scores_all.keys())}")
+        print(f"Loaded BSS from {bss_path}; metrics: {list(bss_scores_all.keys())}")
 
     ###############################################################################
     # load dataset
