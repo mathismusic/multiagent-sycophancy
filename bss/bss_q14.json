@@ -1,0 +1,14 @@
+{
+  "picking_sides": {
+    "qwen14b": 0.16
+  },
+  "sycophant_with_knowledge": {
+    "qwen14b": 0.14130434782608695
+  },
+  "agreement_rate": {
+    "qwen14b": 0.188
+  },
+  "confident_sycophancy": {
+    "qwen14b": 0.1616653433221745
+  }
+}

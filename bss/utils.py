@@ -546,6 +546,22 @@ def mmlu_list_to_csv(samples, csv_path: str = "mmlu_debate_samples.csv"):
     print(f"Saved {len(df)} samples to {csv_path}")
 
 
+def load_mmlu_from_csv(csv_path: str) -> List[MMLUSample]:
+    """Load MMLUSample objects from a CSV previously written by mmlu_list_to_csv."""
+    df = pd.read_csv(csv_path)
+    samples = []
+    for _, row in df.iterrows():
+        choices = [row[f"choice_{label}"] for label in ["A", "B", "C", "D"]]
+        samples.append(MMLUSample(
+            question=row["question"],
+            choices=choices,
+            correct_idx=int(row["answer"]),
+            subject=row["subject"],
+        ))
+    print(f"[data] loaded {len(samples)} MMLU samples from {csv_path}")
+    return samples
+
+
 def load_split_save_dataset(args):
     """
     Load MMLU dataset and split into debate samples and BSS samples.

@@ -1,0 +1,8 @@
+model,final_accuracy,n_samples
+llama3b,0.8093333333333333,750
+llama8b,0.82,750
+qwen14b,0.784,750
+qwen32b,0.8653333333333333,750
+qwen3b,0.888,750
+qwen7b,0.672,750
+majority,0.836,750

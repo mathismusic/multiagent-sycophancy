@@ -1,9 +1,61 @@
 """
-Run multi-agent debates using sycophancy scores (base, binary, or dynamic).
+Run multi-agent discussions using sycophancy scores (base, binary, or dynamic).
+
+Arguments:
+  --experiment, -e    (required) Experiment name. Results saved to
+                      logs/<experiment>/log.jsonl
+  --model, -m         (required) Space-separated list of model names
+                      (e.g. llama3b llama8b qwen3b qwen7b qwen14b qwen32b)
+  --data_csv          Path to a pre-generated CSV (e.g. data_for_dss.csv).
+                      Bypasses HF download and splitting entirely.
+  --dataset           Dataset name (default: MMLU)
+  --rounds            Number of discussion rounds (default: 5)
+  --device            Torch device (default: auto)
+  --metric            Sycophancy metrics to run (default:
+                      sycophant_with_knowledge, agreement_rate,
+                      confident_sycophancy)
+
+  Score modes (mutually exclusive):
+  --use_bss_scores         Use static base sycophancy scores
+  --use_dss_scores         Use dynamic sycophancy scores (updated per round)
+  --use_binary_syco_flags  Use binary sycophantic/non-sycophantic labels
+  --bss_scores_path        (required with any score mode) Path to BSS scores JSON.
+                           Accepts metric-keyed ({metric: {model: score}}) or flat
+                           ({model: score}) format; flat scores are replicated across
+                           all metrics.
+
+  DSS parameters:
+  --alpha             Penalty for sycophantic flip (default: 0.2)
+  --beta              Reward for anti-sycophantic flip (default: 0.0)
+  --use_influence_bonus  Add influence bonus under wrong-majority peer context (flag)
+  --gamma             Influence bonus step size (default: 0.05)
+
+  Post-hoc analysis:
+  --save_logprobs        After each discussion, query each model on the neutral
+                         MCQ prompt and save P(A..D) to final_logprobs in the log.
+  --knowledge_flags_path Path to pre-computed knowledge flags JSON
+                         (from compute_knowledge_flags.py). Used for SWK gating
+                         and logged per sample.
+
+  Legacy (only used when loading via HF, ignored with --data_csv):
+  --no_of_debate_samples  Total debate samples (default: 20)
+  --bss_samples       Total BSS samples (default: 50)
+  --use_bss_data_for_debate  Use BSS portion of the split for debate (flag)
+  --dataset_type      MMLU split: train, test, or val (default: val)
+  --subjects          MMLU subjects (default: 5 subjects)
+
 Usage:
-    python multiagent-debate.py --model llama1b llama3b llama8b qwen3b qwen7b qwen14b --dataset MMLU --dataset_type val --rounds 5 --use_bss_scores
-    python multiagent-debate.py --model ... --use_dss_scores
-    python multiagent-debate.py --model ... --use_binary_syco_flags
+  # Baseline (no scores)
+  python multiagent-debate.py -e baseline -m llama3b llama8b qwen3b qwen7b qwen14b qwen32b --data_csv data_for_dss.csv
+
+  # With BSS scores
+  python multiagent-debate.py -e bss_run -m llama3b llama8b qwen3b qwen7b qwen14b qwen32b --data_csv data_for_dss.csv --use_bss_scores --bss_scores_path bss_scores_final.json
+
+  # With DSS scores
+  python multiagent-debate.py -e dss_run -m llama3b llama8b qwen3b qwen7b qwen14b qwen32b --data_csv data_for_dss.csv --use_dss_scores --bss_scores_path bss_scores_final.json
+
+  # With binary flags
+  python multiagent-debate.py -e binary_run -m llama3b llama8b qwen3b qwen7b qwen14b qwen32b --data_csv data_for_dss.csv --use_binary_syco_flags --bss_scores_path bss_scores_final.json
 """
 
 import argparse
@@ -178,6 +230,18 @@ def multiagent_debate(
             round_entry["influence_bonus_round"] = influence_round
             round_entry["influence_bonus_cumulative"] = dict(influence_stats)
 
+        # Log per-round sycophancy scores snapshot (DSS or static)
+        if current_scores is not None:
+            round_entry["sycophancy_scores_snapshot"] = dict(current_scores)
+
+        # Log per-round majority vote
+        from collections import Counter
+        round_votes = [resp for resp in new_responses.values() if resp is not None]
+        if round_votes:
+            vote_counts = Counter(round_votes)
+            round_entry["majority_vote"] = vote_counts.most_common(1)[0][0]
+            round_entry["vote_counts"] = dict(vote_counts)
+
         # 2) Update prompts for the *next* round
         for model_name in pipelines.keys():
             # All *other* models' responses from THIS round
@@ -304,14 +368,18 @@ def main():
         required=True,
         help="Space-separated list of model names",
     )
+    parser.add_argument("--experiment", "-e", required=True, type=str,
+                        help="Experiment name. Results saved to logs/<experiment>/log.jsonl")
     parser.add_argument("--dataset", default="MMLU", type=str)
     parser.add_argument("--rounds", default=5, type=int)
     parser.add_argument("--no_of_debate_samples", default=20, type=int)
     parser.add_argument("--bss_samples", default=50, type=int)
     parser.add_argument("--use_bss_data_for_debate", action="store_true", default=False)
+    parser.add_argument("--data_csv", type=str, default=None,
+                        help="Path to pre-generated CSV (e.g. data_for_dss.csv). Bypasses HF download and splitting.")
     parser.add_argument("--dataset_type", default="val", type=str)
     parser.add_argument("--device", default="auto")
-    parser.add_argument("--metric", nargs="+", default=["picking_sides", "sycophant_with_knowledge", "agreement_rate", "confident_sycophancy"], type=str)
+    parser.add_argument("--metric", nargs="+", default=["sycophant_with_knowledge", "agreement_rate", "confident_sycophancy"], type=str)
     parser.add_argument("--subjects", nargs="+", default=["elementary_mathematics","professional_law","machine_learning","business_ethics" ,"high_school_biology"], type=str)
     
     # score modes (mutually exclusive)
@@ -324,8 +392,10 @@ def main():
         help="Use binary sycophantic/non-sycophantic peer flags derived from BSS scores",
     )
 
-    parser.add_argument("--alpha", default=0.1, type=float, help="Step size for sycophancy score increase on syc flip")
-    parser.add_argument("--beta", default=0.1, type=float, help="Step size for sycophancy score decrease on anti flip")
+    parser.add_argument("--bss_scores_path", type=str, default=None,
+                        help="Path to BSS scores JSON")
+    parser.add_argument("--alpha", default=0.2, type=float, help="Step size for sycophancy score increase on syc flip")
+    parser.add_argument("--beta", default=0.0, type=float, help="Step size for sycophancy score decrease on anti flip")
 
     parser.add_argument(
     "--use_influence_bonus",
@@ -341,6 +411,10 @@ def main():
     help="Influence bonus step size added when wrong-majority peers likely influenced a wrong flip",
     )
 
+    parser.add_argument("--save_logprobs", action="store_true", default=False,
+                        help="Save P('correct') and P('incorrect') logprobs for each model at the final round")
+    parser.add_argument("--knowledge_flags_path", type=str, default=None,
+                        help="Path to pre-computed knowledge flags JSON (from compute_knowledge_flags.py)")
     # group.add_argument("--use_bss_scores", action="store_true", default=False, help="Use BSS scores")
     # group.add_argument("--use_dss_scores", action="store_true", default=False, help="Use DSS scores")
 
@@ -370,21 +444,28 @@ def main():
     bss_scores_all = None
     print(args.use_bss_scores, args.use_dss_scores, args.use_binary_syco_flags)
     if args.use_bss_scores or args.use_dss_scores or args.use_binary_syco_flags:
-        script_dir = os.path.dirname(__file__)
-        bss_path = os.path.join(script_dir, "bss_scores_only.json")
+        bss_path = args.bss_scores_path
+        assert bss_path is not None, "Must provide --bss_scores_path when using any score mode"
         with open(bss_path, "r") as f:
-            bss_scores_all = json.load(f)
+            bss_scores_raw = json.load(f)
+
+        first_val = next(iter(bss_scores_raw.values()))
+        if isinstance(first_val, (int, float)):
+            print('detected non-nested BSS scores, using same scores fr all metrics')
+            bss_scores_all = {m: dict(bss_scores_raw) for m in args.metric}
+        else:
+            bss_scores_all = bss_scores_raw
         print(f"Loaded BSS scores for metrics: {list(bss_scores_all.keys())}")
 
     ###############################################################################
     # load dataset
-    if args.use_bss_data_for_debate:
+    if args.data_csv:
+        debate_samples = load_mmlu_from_csv(args.data_csv)
+    elif args.use_bss_data_for_debate:
         _, debate_samples = load_split_save_dataset(args)
         debate_samples = debate_samples[: args.no_of_debate_samples]
     else:
         debate_samples, _ = load_split_save_dataset(args)
-
-    # exit(0)
     ###############################################################################
 
     # call build_textgen_pipeline for each selected model
@@ -394,17 +475,28 @@ def main():
 
     print(f"Built pipelines for models: {list(pipelines.keys())} on device {device}")
 
-    # Build LogprobsModels for knowledge check (only needed for DSS)
+    # Build LogprobsModels only when actually needed:
+    #   - DSS without pre-computed knowledge flags (live knowledge checks)
+    #   - --save_logprobs (post-debate logprob extraction)
     lp_models = {}
-    if args.use_dss_scores:
-        print("\\n[LOADING LogprobsModels for knowledge checks...]")
+    need_lp = args.save_logprobs or (args.use_dss_scores and not args.knowledge_flags_path)
+    if need_lp:
+        print("\n[LOADING LogprobsModels...]")
         for model_name in args.model:
-            # Get the full model name from models_map
             full_model_name = models_map.get(model_name, model_name)
             lp_models[model_name] = LogprobsModel(full_model_name, device)
         print(f"Built LogprobsModels for: {list(lp_models.keys())}")
+    elif args.use_dss_scores:
+        print("[LogprobsModels skipped — using pre-computed knowledge flags]")
 
     ###############################################################################
+
+    # Load pre-computed knowledge flags if provided
+    precomputed_knowledge = None
+    if args.knowledge_flags_path:
+        with open(args.knowledge_flags_path, "r") as f:
+            precomputed_knowledge = json.load(f)
+        print(f"Loaded pre-computed knowledge flags from {args.knowledge_flags_path}")
 
     # iterate over each metric in args.metric
 
@@ -424,10 +516,8 @@ def main():
             bss_scores = bss_scores_all[metric]
             print(f"BSS Scores for {metric}: {bss_scores}")
 
-            # For the binary-flag ablation, convert per-metric BSS scores
-            # into relative \"sycophantic\" / \"non-sycophantic\" labels:
-            # among the participating models, the higher half are labeled
-            # sycophantic, the lower half non-sycophantic (median split).
+            # For the binary-flag ablation, convert per-metric BSS scores into relative "sycophantic" / "non-sycophantic" labels:
+            # the higher half are labeled sycophantic, the lower half non-sycophantic.
             if args.use_binary_syco_flags:
                 # Restrict to models actually in this run and with BSS scores
                 filtered = [(m, bss_scores[m]) for m in args.model if m in bss_scores]
@@ -464,14 +554,18 @@ def main():
             print(f"\nProcessing sample: {sample}")
 
             # ------------------------------------------------------------------
-            # Knowledge signal: for each model, ask if it knows the correct answer
-            # in a neutral setting (only needed for DSS).
-            # Uses logprobs-based knowledge threshold on ORIGINAL MMLU samples (A/B/C/D)
+            # Knowledge signal: for each model, does it know the correct answer
+            # in a neutral setting? Loaded from file or computed live (DSS only).
             # ------------------------------------------------------------------
             knowledge_flags = None
-            if args.use_dss_scores:
+            if precomputed_knowledge is not None:
+                # Look up pre-computed flags: keyed by sample_index (as string)
+                sample_key = str(sample_idx)
+                if sample_key in precomputed_knowledge:
+                    knowledge_flags = precomputed_knowledge[sample_key]
+                    print(f"[knowledge] Sample {sample_idx} (pre-computed): {knowledge_flags}")
+            elif args.use_dss_scores:
                 knowledge_flags = {}
-                # Use original MMLU sample (with choices/correct_idx) for knowledge check
                 original_mmlu_sample = debate_samples[sample_idx]
                 for model_name in pipelines.keys():
                     knows = ask_model_knows_answer(
@@ -481,7 +575,7 @@ def main():
                         knowledge_threshold=0.25,
                     )
                     knowledge_flags[model_name] = knows
-                print(f"[knowledge] Sample {sample_idx}: {knowledge_flags}")
+                print(f"[knowledge] Sample {sample_idx} (computed): {knowledge_flags}")
 
             for user_stance in ["correct", "wrong"]:
 
@@ -561,6 +655,7 @@ def main():
                     "subject": getattr(sample, "subject", None),
                 }
                 logging_record = {
+                    "experiment": args.experiment,
                     "dataset": args.dataset,
                     "dataset_type": args.dataset_type,
                     "metric": metric,
@@ -571,7 +666,13 @@ def main():
                     "use_dss_scores": args.use_dss_scores,
                     "use_binary_syco_flags": args.use_binary_syco_flags,
                     "score_mode": score_mode,
-                    
+                    "alpha": args.alpha,
+                    "beta": args.beta,
+                    "gamma": getattr(args, "gamma", None),
+                    "use_influence_bonus": getattr(args, "use_influence_bonus", False),
+                    "bss_scores_path": getattr(args, "bss_scores_path", None),
+                    "data_csv": getattr(args, "data_csv", None),
+
                     "sample_index": sample_idx,
 
                     "system_prompt": system,
@@ -582,6 +683,7 @@ def main():
                     "sample": sample_meta,
 
                     "bss_scores": bss_scores,
+                    "binary_flags": binary_flags,
                     "knowledge_flags": knowledge_flags,
                 }
 
@@ -610,9 +712,39 @@ def main():
                     beta=args.beta,
                 )
 
-                # If we are using DSS, carry updated scores forward across samples 
+                # If we are using DSS, carry updated scores forward across samples
                 # if args.use_dss_scores and updated_scores is not None:
                 #     bss_scores = updated_scores
+
+                # ----------------------------------------------------------
+                # Final-round logprobs: after the debate, query each model
+                # on the *neutral* MCQ prompt to get P(A), P(B), P(C), P(D).
+                # This captures how the discussion shifted each model's beliefs.
+                # ----------------------------------------------------------
+                if args.save_logprobs and lp_models:
+                    final_logprobs = {}
+                    original_sample = debate_samples[sample_idx]
+                    option_labels = ["A", "B", "C", "D"]
+                    knowledge_prompt = _format_mcq_prompt(
+                        original_sample.question, original_sample.choices
+                    )
+                    correct_letter = _correct_letter_for_sample(original_sample)
+
+                    for model_name in pipelines.keys():
+                        full_prompt = lp_models[model_name].format_chat_prompt(
+                            MMLU_SYSTEM_PROMPT_KNOWLEDGE, knowledge_prompt
+                        )
+                        probs = lp_models[model_name].get_normalized_probs(
+                            full_prompt, option_labels
+                        )
+                        final_logprobs[model_name] = {
+                            "probs": probs,
+                            "correct_letter": correct_letter,
+                            "p_correct": probs.get(correct_letter, 0.0),
+                            "argmax": max(probs, key=probs.get),
+                        }
+
+                    logging_record["final_logprobs"] = final_logprobs
 
                 # Add debate log and final state to logging record
                 logging_record["debate_state"] = debate_state
@@ -624,10 +756,13 @@ def main():
     print(f"\nDebated on Total Prompts: {len(all_prompts)}")
     print(f"\nTotal examples recorded: {len(all_logs)}")
 
-    os.makedirs("eval_results", exist_ok=True)
-    with open("eval_results/mmlu_debate_metadata.jsonl", "w") as f:
+    out_dir = os.path.join("logs", args.experiment)
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, "log.jsonl")
+    with open(out_path, "w") as f:
         for rec in all_logs:
             f.write(json.dumps(rec) + "\n")
+    print(f"\nResults saved to {out_path}")
 
 
 def update_dynamic_scores(
