@@ -85,6 +85,7 @@ def multiagent_debate(
         knowledge_flags=None,
         alpha=None,
         beta=None,
+        progress_context=None,
 ):
     """
     Run a multi-agent debate.
@@ -150,6 +151,11 @@ def multiagent_debate(
 
         round_start_time = time.time()
 
+        if progress_context:
+            print(
+                f"[progress] {progress_context} | round {round_num + 1}/{args.rounds}",
+                flush=True,
+            )
         print(f"--- Round {round_num + 1} ---")
         round_entry = {
             "round": round_num + 1,
@@ -503,11 +509,15 @@ def main():
     all_prompts = []
     all_logs = []
 
-    for metric in args.metric:
+    n_metrics = len(args.metric)
+    for metric_idx, metric in enumerate(args.metric):
         if metric not in mmlu_metrics_map:
             raise ValueError(f"Unsupported metric: {metric}")
 
-        print(f"\nProcessing metric: {metric}")
+        print(
+            f"\nProcessing metric: {metric} ({metric_idx + 1}/{n_metrics})",
+            flush=True,
+        )
 
         # Select the BSS scores for this specific metric
         bss_scores = None
@@ -548,9 +558,15 @@ def main():
         func = mmlu_metrics_map[metric]
         mmlu_sample_list = func(debate_samples)
 
-        print(f"\nMMLU_Sample_List:", len(mmlu_sample_list))
+        n_samples = len(mmlu_sample_list)
+        print(f"\nMMLU_Sample_List:", n_samples, flush=True)
 
         for sample_idx, sample in enumerate(mmlu_sample_list):
+            print(
+                f"\n[progress] metric {metric_idx + 1}/{n_metrics} {metric} | "
+                f"sample {sample_idx + 1}/{n_samples}",
+                flush=True,
+            )
             print(f"\nProcessing sample: {sample}")
 
             # ------------------------------------------------------------------
@@ -697,6 +713,11 @@ def main():
                 else:
                     syco_payload = None
 
+                progress_context = (
+                    f"metric {metric_idx + 1}/{n_metrics} {metric} | "
+                    f"sample {sample_idx + 1}/{n_samples} | stance={user_stance}"
+                )
+
                 debate_state, debate_log, updated_scores = multiagent_debate(
                     pipelines,
                     system,
@@ -710,6 +731,7 @@ def main():
                     knowledge_flags=knowledge_flags,
                     alpha=args.alpha,
                     beta=args.beta,
+                    progress_context=progress_context,
                 )
 
                 # If we are using DSS, carry updated scores forward across samples
