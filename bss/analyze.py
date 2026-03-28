@@ -7,7 +7,7 @@ to logs/<experiment>/analysis/.
 Usage:
   cd bss && python analyze.py -e bss
   cd bss && python analyze.py --all
-  cd bss && python analyze.py -e bss --log-file path/to/log.jsonl
+  cd bss && python analyze.py -e bss --log-file path/to/log.jsonl   # one -e only; writes logs/bss/analysis/
 """
 
 from __future__ import annotations
@@ -238,6 +238,105 @@ def compute_influence(records: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(out) if out else pd.DataFrame(columns=["source", "target", "count"])
 
 
+def build_round1_vs_final(records: list[dict]) -> pd.DataFrame:
+    """
+    Accuracy at round 1 vs final on samples where both answers are non-null
+    (same sample set for fair delta).
+    """
+    agg: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"r1_correct": 0, "final_correct": 0, "n": 0}
+    )
+    for rec in records:
+        responses = extract_responses(rec)
+        models = list(responses.keys())
+        n_rounds = min(len(r) for r in responses.values()) if responses else 0
+        if n_rounds < 1:
+            continue
+        for model in models:
+            resps = responses[model]
+            r1 = resps[0]
+            final = resps[-1]
+            if r1 is None or final is None:
+                continue
+            a = agg[model]
+            a["n"] += 1
+            a["r1_correct"] += int(r1 == CORRECT_ANSWER)
+            a["final_correct"] += int(final == CORRECT_ANSWER)
+        votes_r1 = [responses[m][0] for m in models if responses[m][0] is not None]
+        votes_f = [responses[m][-1] for m in models if responses[m][-1] is not None]
+        if not votes_r1 or not votes_f:
+            continue
+        maj1 = Counter(votes_r1).most_common(1)[0][0]
+        majf = Counter(votes_f).most_common(1)[0][0]
+        a = agg["majority"]
+        a["n"] += 1
+        a["r1_correct"] += int(maj1 == CORRECT_ANSWER)
+        a["final_correct"] += int(majf == CORRECT_ANSWER)
+
+    rows = []
+    for model in sorted(agg.keys()):
+        v = agg[model]
+        n = v["n"]
+        if n == 0:
+            continue
+        acc1 = v["r1_correct"] / n
+        accf = v["final_correct"] / n
+        rows.append({
+            "model": model,
+            "accuracy_round1": acc1,
+            "accuracy_final": accf,
+            "delta_final_minus_round1": accf - acc1,
+            "n": n,
+        })
+    return pd.DataFrame(rows)
+
+
+def build_stability(records: list[dict]) -> pd.DataFrame:
+    """
+    Share of samples where first-round answer equals final (both non-null).
+    """
+    agg: dict[str, dict[str, int]] = defaultdict(lambda: {"stable": 0, "n": 0})
+    for rec in records:
+        responses = extract_responses(rec)
+        models = list(responses.keys())
+        n_rounds = min(len(r) for r in responses.values()) if responses else 0
+        if n_rounds < 1:
+            continue
+        for model in models:
+            resps = responses[model]
+            r1 = resps[0]
+            final = resps[-1]
+            if r1 is None or final is None:
+                continue
+            a = agg[model]
+            a["n"] += 1
+            if r1 == final:
+                a["stable"] += 1
+        votes_r1 = [responses[m][0] for m in models if responses[m][0] is not None]
+        votes_f = [responses[m][-1] for m in models if responses[m][-1] is not None]
+        if not votes_r1 or not votes_f:
+            continue
+        maj1 = Counter(votes_r1).most_common(1)[0][0]
+        majf = Counter(votes_f).most_common(1)[0][0]
+        a = agg["majority"]
+        a["n"] += 1
+        if maj1 == majf:
+            a["stable"] += 1
+
+    rows = []
+    for model in sorted(agg.keys()):
+        v = agg[model]
+        n = v["n"]
+        if n == 0:
+            continue
+        rows.append({
+            "model": model,
+            "stability_rate": v["stable"] / n,
+            "n": n,
+        })
+    return pd.DataFrame(rows)
+
+
 def compute_round_trajectory(records: list[dict]) -> pd.DataFrame:
     data: dict[str, dict[int, list[bool]]] = defaultdict(lambda: defaultdict(list))
     for rec in records:
@@ -396,6 +495,8 @@ def extract_bss_scores_table(records: list[dict]) -> pd.DataFrame:
     for metric, bss in sorted(by_metric.items()):
         for model, score in sorted(bss.items()):
             rows.append({"metric": metric, "model": model, "bss_score": score})
+    if not rows:
+        return pd.DataFrame(columns=["metric", "model", "bss_score"])
     return pd.DataFrame(rows)
 
 
@@ -423,6 +524,8 @@ def build_summary(
     sycophancy_summary: pd.DataFrame,
     kg_df: pd.DataFrame,
     convergence_df: pd.DataFrame,
+    round1_vs_final_df: pd.DataFrame,
+    stability_df: pd.DataFrame,
 ) -> dict:
     exp = records[0].get("experiment", "unknown") if records else "unknown"
     summary: dict = {
@@ -472,6 +575,19 @@ def build_summary(
         summary["avg_convergence_round"] = round(
             float(convergence_df["settled_round"].mean()), 2
         )
+
+    if not round1_vs_final_df.empty:
+        summary["delta_final_minus_round1"] = {
+            row["model"]: round(float(row["delta_final_minus_round1"]), 4)
+            for _, row in round1_vs_final_df.iterrows()
+        }
+
+    if not stability_df.empty:
+        summary["stability_rate"] = {
+            row["model"]: round(float(row["stability_rate"]), 4)
+            for _, row in stability_df.iterrows()
+        }
+
     return summary
 
 
@@ -525,6 +641,12 @@ def analyze_experiment(
     kg_df = build_knowledge_gated_accuracy(records)
     kg_df.to_csv(os.path.join(out_dir, "knowledge_gated_accuracy.csv"), index=False)
 
+    r1f_df = build_round1_vs_final(records)
+    r1f_df.to_csv(os.path.join(out_dir, "round1_vs_final.csv"), index=False)
+
+    stab_df = build_stability(records)
+    stab_df.to_csv(os.path.join(out_dir, "stability.csv"), index=False)
+
     bss_df = extract_bss_scores_table(records)
     bss_df.to_csv(os.path.join(out_dir, "bss_scores.csv"), index=False)
 
@@ -533,7 +655,8 @@ def analyze_experiment(
         dss_df.to_csv(os.path.join(out_dir, "dss_trajectory.csv"), index=False)
 
     summary = build_summary(
-        records, accuracy_df, flip_summary, syco_sum, kg_df, conv_df
+        records, accuracy_df, flip_summary, syco_sum, kg_df, conv_df,
+        r1f_df, stab_df,
     )
     with open(os.path.join(out_dir, "summary.json"), "w") as f:
         json.dump(summary, f, indent=2)
@@ -574,10 +697,22 @@ def main() -> None:
     parser.add_argument("--all", action="store_true",
                         help="Analyze every logs/<d>/log.jsonl found")
     parser.add_argument("--log-file", type=str, default=None,
-                        help="Read this JSONL instead of logs/<experiment>/log.jsonl (use with -e)")
+                        help="Read this JSONL instead of logs/<experiment>/log.jsonl. "
+                        "Requires exactly one -e (output still goes to logs/<e>/analysis/).")
     parser.add_argument("-o", "--comparison-out", type=str, default=None,
                         help="Path for comparison.csv (default: logs/comparison.csv)")
     args = parser.parse_args()
+
+    if args.log_file:
+        if args.all:
+            parser.error("--log-file cannot be used with --all")
+        if not args.experiments:
+            parser.error("--log-file requires exactly one -e/--experiment (names logs/<e>/analysis/)")
+        if len(args.experiments) > 1:
+            parser.error(
+                "--log-file only applies to one JSONL; pass a single -e EXP "
+                "(not multiple -e). Output path is always logs/EXP/analysis/."
+            )
 
     comparison_out = args.comparison_out or os.path.join("logs", "comparison.csv")
 
