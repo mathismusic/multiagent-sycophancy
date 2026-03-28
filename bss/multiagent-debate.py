@@ -505,17 +505,51 @@ def main():
         print(f"Loaded pre-computed knowledge flags from {args.knowledge_flags_path}")
 
     # iterate over each metric in args.metric
+    #
+    # Deduplication: metrics that share the same prompt tuple, system prompt,
+    # sample transform, parser, and BSS scores produce identical LLM calls.
+    # We group them so the debate runs once and the result is logged under
+    # every metric name in the group.
+
+    def _metric_key(m):
+        """Return a hashable key capturing everything that affects the debate."""
+        return (
+            id(MMLU[m.upper()]),                   # prompt tuple identity
+            MMLU_SYSTEM_PROMPTS[m],                # system prompt text
+            id(mmlu_metrics_map[m]),                # sample transform function
+            id(parsing_metrics_map[m]),             # parser function
+            json.dumps(bss_scores_all.get(m) if bss_scores_all else None, sort_keys=True),
+        )
+
+    # Group metrics that are functionally identical
+    metric_groups = []  # list of lists; first element is the "leader"
+    seen_keys = {}
+    for metric in args.metric:
+        if metric not in mmlu_metrics_map:
+            raise ValueError(f"Unsupported metric: {metric}")
+        key = _metric_key(metric)
+        if key in seen_keys:
+            seen_keys[key].append(metric)
+        else:
+            group = [metric]
+            seen_keys[key] = group
+            metric_groups.append(group)
+
+    if any(len(g) > 1 for g in metric_groups):
+        print(f"\n[dedup] Metric groups (debate runs once per group):")
+        for g in metric_groups:
+            print(f"  leader={g[0]}, siblings={g[1:]}")
+    n_groups = len(metric_groups)
 
     all_prompts = []
     all_logs = []
 
-    n_metrics = len(args.metric)
-    for metric_idx, metric in enumerate(args.metric):
-        if metric not in mmlu_metrics_map:
-            raise ValueError(f"Unsupported metric: {metric}")
+    for group_idx, metric_group in enumerate(metric_groups):
+        metric = metric_group[0]  # leader — we run the debate with this one
+        siblings = metric_group[1:]
 
         print(
-            f"\nProcessing metric: {metric} ({metric_idx + 1}/{n_metrics})",
+            f"\nProcessing metric group: {metric_group} ({group_idx + 1}/{n_groups})",
             flush=True,
         )
 
@@ -550,6 +584,9 @@ def main():
                     if not hasattr(args, "binary_flags_by_metric"):
                         args.binary_flags_by_metric = {}
                     args.binary_flags_by_metric[metric] = binary_flags
+                    # Copy for siblings so the debate function can look them up
+                    for sib in siblings:
+                        args.binary_flags_by_metric[sib] = binary_flags
                 else:
                     print(f"[warning] Not enough models with BSS scores for metric '{metric}' to define binary flags")
         elif bss_scores_all is not None:
@@ -563,7 +600,7 @@ def main():
 
         for sample_idx, sample in enumerate(mmlu_sample_list):
             print(
-                f"\n[progress] metric {metric_idx + 1}/{n_metrics} {metric} | "
+                f"\n[progress] metric group {group_idx + 1}/{n_groups} {metric_group} | "
                 f"sample {sample_idx + 1}/{n_samples}",
                 flush=True,
             )
@@ -575,23 +612,52 @@ def main():
             # ------------------------------------------------------------------
             knowledge_flags = None
             if precomputed_knowledge is not None:
-                # Look up pre-computed flags: keyed by sample_index (as string)
+                # Look up pre-computed probes: keyed by sample_index (as string).
+                # Values are argmax letters (e.g. "A", "B") — resolve to bool
+                # using the weaker gate: knows = (argmax != wrong_letter).
                 sample_key = str(sample_idx)
                 if sample_key in precomputed_knowledge:
-                    knowledge_flags = precomputed_knowledge[sample_key]
-                    print(f"[knowledge] Sample {sample_idx} (pre-computed): {knowledge_flags}")
+                    raw_flags = precomputed_knowledge[sample_key]
+                    # Determine the wrong letter for this sample
+                    original_mmlu_sample = debate_samples[sample_idx]
+                    option_labels = ["A", "B", "C", "D"]
+                    wrong_text = sample.wrong
+                    try:
+                        wrong_idx = original_mmlu_sample.choices.index(wrong_text)
+                        wrong_letter = option_labels[wrong_idx]
+                    except (ValueError, IndexError):
+                        wrong_letter = None
+
+                    if wrong_letter is not None:
+                        # Weaker gate: model "knows" if its argmax is NOT the wrong stance
+                        knowledge_flags = {
+                            m: (v != wrong_letter) if isinstance(v, str) else bool(v)
+                            for m, v in raw_flags.items()
+                        }
+                    else:
+                        # Fallback: treat string flags as legacy bools
+                        knowledge_flags = {
+                            m: bool(v) for m, v in raw_flags.items()
+                        }
+                    print(f"[knowledge] Sample {sample_idx} (pre-computed, gate: argmax!='{wrong_letter}'): {knowledge_flags}")
             elif args.use_dss_scores:
                 knowledge_flags = {}
                 original_mmlu_sample = debate_samples[sample_idx]
+                # Determine wrong letter for the weaker gate
+                option_labels_live = ["A", "B", "C", "D"]
+                try:
+                    wrong_idx_live = original_mmlu_sample.choices.index(sample.wrong)
+                    wrong_letter_live = option_labels_live[wrong_idx_live]
+                except (ValueError, IndexError):
+                    wrong_letter_live = None
                 for model_name in pipelines.keys():
                     knows = ask_model_knows_answer(
                         lp_model=lp_models[model_name],
-                        system_prompt=MMLU_SYSTEM_PROMPT_KNOWLEDGE,
                         sample=original_mmlu_sample,
-                        knowledge_threshold=0.25,
+                        wrong_letter=wrong_letter_live,
                     )
                     knowledge_flags[model_name] = knows
-                print(f"[knowledge] Sample {sample_idx} (computed): {knowledge_flags}")
+                print(f"[knowledge] Sample {sample_idx} (computed, gate: argmax!='{wrong_letter_live}'): {knowledge_flags}")
 
             for user_stance in ["correct", "wrong"]:
 
@@ -601,7 +667,7 @@ def main():
 
                 ###############################################################################
                 #prompts
-                system = MMLU_SYSTEM_PROMPT_INITAL
+                system = MMLU_SYSTEM_PROMPTS[metric]
 
                 chosen_prompt = metric.upper()
                 print(f"\nChosen Prompt: {chosen_prompt}")
@@ -648,7 +714,6 @@ def main():
                         )
 
                 all_prompts.append(user_prompt)
-                conversation_id = f"{metric}_sample{sample_idx}_{user_stance}"
 
                 print(f"\n Final System Prompt: {system}")
                 print(f"\n Final User Prompt: {user_prompt}")
@@ -670,38 +735,6 @@ def main():
                     "wrong": getattr(sample, "wrong", None),
                     "subject": getattr(sample, "subject", None),
                 }
-                logging_record = {
-                    "experiment": args.experiment,
-                    "dataset": args.dataset,
-                    "dataset_type": args.dataset_type,
-                    "metric": metric,
-                    "user_stance": user_stance,
-                    "rounds": args.rounds,
-                    "models": args.model,
-                    "use_bss_scores": args.use_bss_scores,
-                    "use_dss_scores": args.use_dss_scores,
-                    "use_binary_syco_flags": args.use_binary_syco_flags,
-                    "score_mode": score_mode,
-                    "alpha": args.alpha,
-                    "beta": args.beta,
-                    "gamma": getattr(args, "gamma", None),
-                    "use_influence_bonus": getattr(args, "use_influence_bonus", False),
-                    "bss_scores_path": getattr(args, "bss_scores_path", None),
-                    "data_csv": getattr(args, "data_csv", None),
-
-                    "sample_index": sample_idx,
-
-                    "system_prompt": system,
-                    "prompt_key": chosen_prompt,
-                    "prompt_template": prompt[0],
-                    "user_prompt": user_prompt,
-
-                    "sample": sample_meta,
-
-                    "bss_scores": bss_scores,
-                    "binary_flags": binary_flags,
-                    "knowledge_flags": knowledge_flags,
-                }
 
                 ##############################################################################
                 # Multi-agent debate
@@ -714,7 +747,7 @@ def main():
                     syco_payload = None
 
                 progress_context = (
-                    f"metric {metric_idx + 1}/{n_metrics} {metric} | "
+                    f"metric group {group_idx + 1}/{n_groups} {metric_group} | "
                     f"sample {sample_idx + 1}/{n_samples} | stance={user_stance}"
                 )
 
@@ -743,6 +776,7 @@ def main():
                 # on the *neutral* MCQ prompt to get P(A), P(B), P(C), P(D).
                 # This captures how the discussion shifted each model's beliefs.
                 # ----------------------------------------------------------
+                final_logprobs = None
                 if args.save_logprobs and lp_models:
                     final_logprobs = {}
                     original_sample = debate_samples[sample_idx]
@@ -766,12 +800,47 @@ def main():
                             "argmax": max(probs, key=probs.get),
                         }
 
-                    logging_record["final_logprobs"] = final_logprobs
+                # Log the result under the leader AND all siblings
+                for log_metric in metric_group:
+                    conversation_id = f"{log_metric}_sample{sample_idx}_{user_stance}"
+                    logging_record = {
+                        "experiment": args.experiment,
+                        "dataset": args.dataset,
+                        "dataset_type": args.dataset_type,
+                        "metric": log_metric,
+                        "user_stance": user_stance,
+                        "rounds": args.rounds,
+                        "models": args.model,
+                        "use_bss_scores": args.use_bss_scores,
+                        "use_dss_scores": args.use_dss_scores,
+                        "use_binary_syco_flags": args.use_binary_syco_flags,
+                        "score_mode": score_mode,
+                        "alpha": args.alpha,
+                        "beta": args.beta,
+                        "gamma": getattr(args, "gamma", None),
+                        "use_influence_bonus": getattr(args, "use_influence_bonus", False),
+                        "bss_scores_path": getattr(args, "bss_scores_path", None),
+                        "data_csv": getattr(args, "data_csv", None),
 
-                # Add debate log and final state to logging record
-                logging_record["debate_state"] = debate_state
-                logging_record["debate_log"] = debate_log
-                all_logs.append({conversation_id: logging_record})
+                        "sample_index": sample_idx,
+
+                        "system_prompt": system,
+                        "prompt_key": log_metric.upper(),
+                        "prompt_template": prompt[0],
+                        "user_prompt": user_prompt,
+
+                        "sample": sample_meta,
+
+                        "bss_scores": bss_scores,
+                        "binary_flags": binary_flags,
+                        "knowledge_flags": knowledge_flags,
+
+                        "debate_state": debate_state,
+                        "debate_log": debate_log,
+                    }
+                    if final_logprobs is not None:
+                        logging_record["final_logprobs"] = final_logprobs
+                    all_logs.append({conversation_id: logging_record})
 
                 print(f"Final Debate State: {debate_state}")
 
@@ -1046,40 +1115,37 @@ def update_dynamic_scores(
 
 
 def ask_model_knows_answer(
-    lp_model: LogprobsModel, 
-    system_prompt: str, 
-    sample, 
-    knowledge_threshold: float = 0.25
+    lp_model: LogprobsModel,
+    sample,
+    wrong_letter: str = None,
 ) -> bool:
     """
-    Query the model using logprobs to see if it knows the correct answer
-    for this MMLUSample. Returns True if P(correct_answer) >= knowledge_threshold.
+    Weaker knowledge gate: the model "knows" if its argmax MCQ option
+    is NOT the user's wrong stance.
 
-    This is the 'knowledge signal' we use to distinguish lack of knowledge from sycophancy.
-    Uses the same logprobs-based approach as compute_confident_sycophancy and 
-    compute_sycophant_with_knowledge in bss_calc.py.
-    
     Args:
         lp_model: LogprobsModel instance for the model
-        system_prompt: System prompt to use
-        sample: MMLUSample with .question, .choices, .correct_idx attributes
-        knowledge_threshold: Minimum P(correct_answer) to consider model "knows" (default 0.25)
-    
+        sample: MMLUSample with .question, .choices attributes
+        wrong_letter: The option letter (A/B/C/D) corresponding to the
+                      user's wrong stance. If None, falls back to the old
+                      gate (argmax == correct answer).
+
     Returns:
         True if model passes knowledge check, False otherwise
     """
     option_labels = ["A", "B", "C", "D"]
     knowledge_prompt = _format_mcq_prompt(sample.question, sample.choices)
     full_prompt = lp_model.format_chat_prompt(MMLU_SYSTEM_PROMPT_KNOWLEDGE, knowledge_prompt)
-    
-    # Get normalized probabilities for A, B, C, D
+
     mcq_probs = lp_model.get_normalized_probs(full_prompt, option_labels)
-    correct_letter = _correct_letter_for_sample(sample)
-    prob_correct_answer = mcq_probs.get(correct_letter, 0.0)
-    
-    best_prob = max(mcq_probs.values()) if mcq_probs else 0.0
-    passed_knowledge = abs(prob_correct_answer - best_prob) < 1e-6 
-    return passed_knowledge
+    argmax_letter = max(mcq_probs, key=mcq_probs.get) if mcq_probs else None
+
+    if wrong_letter is not None:
+        return argmax_letter != wrong_letter
+    else:
+        # Legacy fallback: argmax == correct
+        correct_letter = _correct_letter_for_sample(sample)
+        return argmax_letter == correct_letter
 
 if __name__ == "__main__":
     main()

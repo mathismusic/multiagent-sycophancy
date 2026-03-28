@@ -184,14 +184,59 @@ def build_textgen_pipeline(model, device: str):
     return pipe
 
 
+# Toggle to switch between native chat templates and the legacy Phi-style template.
+# Set to False to revert to the old hardcoded format.
+USE_NATIVE_CHAT_TEMPLATE = True
+
+
+def _format_prompt_legacy(system: str, user: str) -> str:
+    """Legacy Phi-style chat template (hardcoded)."""
+    return (
+        f"<|system|>\n{system}\n<|end|>\n"
+        f"<|user|>\n{user}\n<|end|>\n<|assistant|>\n"
+    )
+
+
+def _format_prompt_native(tokenizer, system: str, user: str) -> str:
+    """Use the tokenizer's built-in chat template (model-specific)."""
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+    return tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+
+
+def _extract_reply(text: str, tokenizer=None) -> str:
+    """Extract the assistant's reply from generated text."""
+    if USE_NATIVE_CHAT_TEMPLATE and tokenizer is not None:
+        # For native templates, the prompt is included in the output.
+        # Split on common assistant markers.
+        # Llama 3: <|start_header_id|>assistant<|end_header_id|>\n\n
+        # Qwen 2.5: <|im_start|>assistant\n
+        for marker in [
+            "<|start_header_id|>assistant<|end_header_id|>\n\n",
+            "<|im_start|>assistant\n",
+            "<|assistant|>\n",
+        ]:
+            if marker in text:
+                return text.rsplit(marker, 1)[-1].strip()
+    # Legacy fallback
+    if "<|assistant|>" in text:
+        return text.split("<|assistant|>", 1)[-1].strip()
+    return text.strip()
+
+
 def chat(pipe, system: str, user: str, gen: GenConfig) -> str:
     """
     Single-turn chat with a model pipeline.
     """
-    prompt = (
-        f"<|system|>\n{system}\n<|end|>\n"
-        f"<|user|>\n{user}\n<|end|>\n<|assistant|>\n"
-    )
+    if USE_NATIVE_CHAT_TEMPLATE:
+        prompt = _format_prompt_native(pipe.tokenizer, system, user)
+    else:
+        prompt = _format_prompt_legacy(system, user)
+
     out = pipe(
         prompt,
         max_new_tokens=gen.max_new_tokens,
@@ -200,19 +245,17 @@ def chat(pipe, system: str, user: str, gen: GenConfig) -> str:
         repetition_penalty=gen.repetition_penalty,
         do_sample=(gen.temperature > 0),
     )[0]["generated_text"]
-    if "<|assistant|>" in out:
-        return out.split("<|assistant|>", 1)[-1].strip()
-    return out
+    return _extract_reply(out, pipe.tokenizer if USE_NATIVE_CHAT_TEMPLATE else None)
 
 
 def chat_batch(pipe, system: str, users: List[str], gen: GenConfig, batch_size: int = 8) -> List[str]:
     """
     Batched chat inference for multiple user prompts.
     """
-    prompts = [
-        f"<|system|>\n{system}\n<|end|>\n<|user|>\n{u}\n<|end|>\n<|assistant|>\n"
-        for u in users
-    ]
+    if USE_NATIVE_CHAT_TEMPLATE:
+        prompts = [_format_prompt_native(pipe.tokenizer, system, u) for u in users]
+    else:
+        prompts = [_format_prompt_legacy(system, u) for u in users]
 
     # Try batch inference (works for HF pipelines)
     try:
@@ -226,11 +269,10 @@ def chat_batch(pipe, system: str, users: List[str], gen: GenConfig, batch_size: 
             batch_size=batch_size
         )
         results = []
+        tok = pipe.tokenizer if USE_NATIVE_CHAT_TEMPLATE else None
         for out in outputs:
             text = out[0]["generated_text"]
-            if "<|assistant|>" in text:
-                text = text.split("<|assistant|>", 1)[-1].strip()
-            results.append(text)
+            results.append(_extract_reply(text, tok))
         return results
     except Exception:
         # Fallback for backends that don't support batching (e.g. API adapters)

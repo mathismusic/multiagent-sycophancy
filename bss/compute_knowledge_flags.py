@@ -1,12 +1,16 @@
 """
-Pre-compute knowledge flags for each (sample, model) pair.
+Pre-compute knowledge probes for each (sample, model) pair.
 
 For every sample in the dataset and every model, queries the model on a
-neutral MCQ prompt (no user stance / no discussion context) and checks
-whether argmax(P(A), P(B), P(C), P(D)) == correct answer.
+neutral MCQ prompt (no user stance / no discussion context) and records
+the model's argmax option letter (A/B/C/D).
 
 Output: a JSON file keyed by sample index (as string), each value is a dict
-mapping model name to bool (True = model knows the answer).
+mapping model name to the argmax letter (e.g. "A", "B", "C", "D").
+
+Consumers resolve this to a bool at runtime by comparing against the
+specific wrong stance chosen for that sample:
+    knows = (knowledge_flags[model] != wrong_letter)
 
 Arguments:
   --data_csv      (required) Path to the dataset CSV (e.g. data_for_dss.csv)
@@ -16,8 +20,8 @@ Arguments:
   --device        Torch device (default: auto)
 
 Usage:
-  python compute_knowledge_flags.py --data_csv data_for_dss.csv \
-      -m llama3b llama8b qwen3b qwen7b qwen14b qwen32b \
+  python compute_knowledge_flags.py --data_csv data_for_dss.csv \\
+      -m llama3b llama8b qwen3b qwen7b qwen14b qwen32b \\
       -o knowledge_flags.json
 """
 
@@ -31,7 +35,7 @@ from logprobs_model import LogprobsModel
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Pre-compute knowledge flags for (sample, model) pairs.")
+    parser = argparse.ArgumentParser(description="Pre-compute knowledge probes for (sample, model) pairs.")
     parser.add_argument("--data_csv", type=str, required=True, help="Path to dataset CSV")
     parser.add_argument("--models", "-m", nargs="+", required=True, help="Model short names")
     parser.add_argument("--output", "-o", type=str, default="knowledge_flags.json", help="Output JSON path")
@@ -53,15 +57,13 @@ def main():
 
     for idx, sample in enumerate(samples):
         knowledge_prompt = _format_mcq_prompt(sample.question, sample.choices)
-        correct_letter = _correct_letter_for_sample(sample)
         flags = {}
 
         for model_name, lp_model in lp_models.items():
             full_prompt = lp_model.format_chat_prompt(MMLU_SYSTEM_PROMPT_KNOWLEDGE, knowledge_prompt)
             probs = lp_model.get_normalized_probs(full_prompt, option_labels)
             argmax_letter = max(probs, key=probs.get)
-            knows = (argmax_letter == correct_letter)
-            flags[model_name] = knows
+            flags[model_name] = argmax_letter
 
         knowledge_flags[str(idx)] = flags
 
@@ -71,7 +73,7 @@ def main():
     # Save
     with open(args.output, "w") as f:
         json.dump(knowledge_flags, f, indent=2)
-    print(f"\nSaved knowledge flags for {len(samples)} samples x {len(args.models)} models to {args.output}")
+    print(f"\nSaved knowledge probes for {len(samples)} samples x {len(args.models)} models to {args.output}")
 
 
 if __name__ == "__main__":

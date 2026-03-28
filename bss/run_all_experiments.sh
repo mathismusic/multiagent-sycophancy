@@ -110,22 +110,22 @@ run_experiment() {
   return 0
 }
 
-# --- Batch 1: (a) baseline + (b) random scores ---
-step_start "Batch 1: (a) baseline + (b) random_bss"
+# --- Batch 1: (a) baseline + (b) actual bss ---
+step_start "Batch 1: (a) baseline + (b) bss"
 PIDS=()
 run_experiment 0,1,2,3 baseline && PIDS+=($!)
-run_experiment 4,5,6,7 random_bss \
-  --use_bss_scores --bss_scores_path $RANDOM_SCORES && PIDS+=($!)
+run_experiment 4,5,6,7 bss \
+  --use_bss_scores --bss_scores_path $BSS_SCORES && PIDS+=($!)
 [ ${#PIDS[@]} -gt 0 ] && wait "${PIDS[@]}"
 step_done "Batch 1"
 
-# --- Batch 2: (c) accuracy scores + (d) actual BSS ---
-step_start "Batch 2: (c) accuracy_bss + (d) bss"
+# --- Batch 2: (c) accuracy scores + (d) random scores ---
+step_start "Batch 2: (c) accuracy_bss + (d) random_bss"
 PIDS=()
 run_experiment 0,1,2,3 accuracy_bss \
   --use_bss_scores --bss_scores_path $ACCURACY_SCORES && PIDS+=($!)
-run_experiment 4,5,6,7 bss \
-  --use_bss_scores --bss_scores_path $BSS_SCORES && PIDS+=($!)
+run_experiment 4,5,6,7 random_bss \
+  --use_bss_scores --bss_scores_path $RANDOM_SCORES && PIDS+=($!)
 [ ${#PIDS[@]} -gt 0 ] && wait "${PIDS[@]}"
 step_done "Batch 2"
 

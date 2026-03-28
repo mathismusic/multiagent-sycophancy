@@ -64,15 +64,26 @@ class LogprobsModel:
     
     def format_chat_prompt(self, system: str, user: str) -> str:
         """
-        Format as chat prompt using the EXACT SAME format as bss_calc.py's chat() function.
-        This ensures consistency with existing metrics.
+        Format as chat prompt, consistent with utils.py's chat() function.
+
+        Uses the tokenizer's native chat template when USE_NATIVE_CHAT_TEMPLATE
+        is True (default), otherwise falls back to the legacy Phi-style format.
         """
-        # EXACT format from utils.py chat() function
-        prompt = (
-            f"<|system|>\n{system}\n<|end|>\n"
-            f"<|user|>\n{user}\n<|end|>\n<|assistant|>\n"
-        )
-        return prompt
+        from utils import USE_NATIVE_CHAT_TEMPLATE
+
+        if USE_NATIVE_CHAT_TEMPLATE:
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ]
+            return self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+        else:
+            return (
+                f"<|system|>\n{system}\n<|end|>\n"
+                f"<|user|>\n{user}\n<|end|>\n<|assistant|>\n"
+            )
     
     def get_token_logprobs(
         self, 
