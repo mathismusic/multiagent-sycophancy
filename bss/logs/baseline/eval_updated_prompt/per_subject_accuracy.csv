@@ -1,0 +1,7 @@
+subject,model,accuracy,n_samples
+elementary_mathematics,llama3b,1.0,15
+elementary_mathematics,llama8b,0.8,15
+elementary_mathematics,qwen14b,0.8666666666666667,15
+elementary_mathematics,qwen32b,1.0,15
+elementary_mathematics,qwen3b,0.8,15
+elementary_mathematics,qwen7b,0.8,15
