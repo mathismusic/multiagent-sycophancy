@@ -1,0 +1,125 @@
+{
+  "experiment": "baseline",
+  "score_mode": "none",
+  "n_records": 750,
+  "models": [
+    "llama3b",
+    "llama8b",
+    "qwen3b",
+    "qwen7b",
+    "qwen14b",
+    "qwen32b"
+  ],
+  "metrics": [
+    "agreement_rate",
+    "confident_sycophancy",
+    "sycophant_with_knowledge"
+  ],
+  "alpha": 0.2,
+  "beta": 0.0,
+  "accuracy": {
+    "llama3b": 0.8674,
+    "llama8b": 0.9,
+    "majority": 0.92,
+    "qwen14b": 0.9213,
+    "qwen32b": 0.924,
+    "qwen3b": 0.8987,
+    "qwen7b": 0.9133
+  },
+  "null_rates": {
+    "llama3b": 0.0347
+  },
+  "flip_rates": {
+    "llama3b": 0.1307,
+    "llama8b": 0.0683,
+    "qwen14b": 0.0577,
+    "qwen32b": 0.0667,
+    "qwen3b": 0.0693,
+    "qwen7b": 0.0637
+  },
+  "post_sycophancy": {
+    "agreement_rate": {
+      "llama3b": 0.148,
+      "llama8b": 0.112,
+      "qwen14b": 0.092,
+      "qwen32b": 0.084,
+      "qwen3b": 0.112,
+      "qwen7b": 0.092,
+      "majority": 0.1
+    },
+    "confident_sycophancy": {
+      "llama3b": 0.112,
+      "llama8b": 0.08,
+      "qwen14b": 0.056,
+      "qwen32b": 0.052,
+      "qwen3b": 0.08,
+      "qwen7b": 0.072,
+      "majority": 0.056
+    },
+    "sycophant_with_knowledge": {
+      "llama3b": 0.124,
+      "llama8b": 0.108,
+      "qwen14b": 0.088,
+      "qwen32b": 0.092,
+      "qwen3b": 0.112,
+      "qwen7b": 0.096,
+      "majority": 0.084
+    }
+  },
+  "post_discussion_sycophancy": {
+    "agreement_rate": {
+      "llama3b": 0.148,
+      "llama8b": 0.112,
+      "qwen14b": 0.092,
+      "qwen32b": 0.084,
+      "qwen3b": 0.112,
+      "qwen7b": 0.092,
+      "majority": 0.1
+    },
+    "confident_sycophancy": {
+      "llama3b": 0.112,
+      "llama8b": 0.08,
+      "qwen14b": 0.056,
+      "qwen32b": 0.052,
+      "qwen3b": 0.08,
+      "qwen7b": 0.072,
+      "majority": 0.056
+    },
+    "sycophant_with_knowledge": {
+      "llama3b": 0.124,
+      "llama8b": 0.108,
+      "qwen14b": 0.088,
+      "qwen32b": 0.092,
+      "qwen3b": 0.112,
+      "qwen7b": 0.096,
+      "majority": 0.084
+    }
+  },
+  "knowledge_gated_accuracy": {
+    "llama3b": 0.8286,
+    "llama8b": 0.9233,
+    "qwen14b": 0.938,
+    "qwen32b": 0.943,
+    "qwen3b": 0.924,
+    "qwen7b": 0.9303
+  },
+  "avg_convergence_round": 1.23,
+  "delta_final_minus_round1": {
+    "llama3b": -0.0981,
+    "llama8b": -0.0173,
+    "majority": -0.044,
+    "qwen14b": 0.0947,
+    "qwen32b": 0.096,
+    "qwen3b": -0.0453,
+    "qwen7b": 0.0653
+  },
+  "stability_rate": {
+    "llama3b": 0.8688,
+    "llama8b": 0.9107,
+    "majority": 0.94,
+    "qwen14b": 0.8787,
+    "qwen32b": 0.8693,
+    "qwen3b": 0.9173,
+    "qwen7b": 0.9027
+  }
+}
