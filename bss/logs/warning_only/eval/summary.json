@@ -1,6 +1,6 @@
 {
-  "experiment": "baseline",
-  "score_mode": "none",
+  "experiment": "warning_only",
+  "score_mode": "warning_only",
   "n_records": 750,
   "models": [
     "llama3b",

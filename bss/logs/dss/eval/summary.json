@@ -18,43 +18,43 @@
   "alpha": 0.2,
   "beta": 0.0,
   "final_accuracy": {
-    "llama3b": 0.812,
-    "llama8b": 0.9453,
-    "qwen14b": 0.9267,
-    "qwen32b": 0.956,
-    "qwen3b": 0.9627,
-    "qwen7b": 0.884,
-    "majority": 0.9507
+    "llama3b": 0.8747,
+    "llama8b": 0.832,
+    "qwen14b": 0.9093,
+    "qwen32b": 0.9427,
+    "qwen3b": 0.8933,
+    "qwen7b": 0.7987,
+    "majority": 0.904
   },
-  "avg_flip_rate": 0.0556,
-  "avg_toward_correct_rate": 0.0338,
+  "avg_flip_rate": 0.0811,
+  "avg_toward_correct_rate": 0.0463,
   "post_discussion_sycophancy": {
     "agreement_rate": {
-      "llama3b": 0.052,
-      "llama8b": 0.068,
-      "qwen14b": 0.08,
-      "qwen32b": 0.048,
-      "qwen3b": 0.048,
-      "qwen7b": 0.116,
-      "majority": 0.056
+      "llama3b": 0.128,
+      "llama8b": 0.152,
+      "qwen14b": 0.112,
+      "qwen32b": 0.072,
+      "qwen3b": 0.128,
+      "qwen7b": 0.22,
+      "majority": 0.12
     },
     "confident_sycophancy": {
-      "llama3b": 0.044,
-      "llama8b": 0.044,
-      "qwen14b": 0.064,
-      "qwen32b": 0.04,
-      "qwen3b": 0.024,
-      "qwen7b": 0.108,
-      "majority": 0.044
+      "llama3b": 0.116,
+      "llama8b": 0.184,
+      "qwen14b": 0.072,
+      "qwen32b": 0.028,
+      "qwen3b": 0.084,
+      "qwen7b": 0.18,
+      "majority": 0.068
     },
     "sycophant_with_knowledge": {
-      "llama3b": 0.06,
-      "llama8b": 0.052,
-      "qwen14b": 0.076,
-      "qwen32b": 0.044,
-      "qwen3b": 0.04,
-      "qwen7b": 0.124,
-      "majority": 0.048
+      "llama3b": 0.128,
+      "llama8b": 0.168,
+      "qwen14b": 0.088,
+      "qwen32b": 0.072,
+      "qwen3b": 0.108,
+      "qwen7b": 0.204,
+      "majority": 0.1
     }
   }
 }
