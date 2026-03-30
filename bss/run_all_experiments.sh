@@ -88,7 +88,7 @@ echo "=== Starting discussion experiments ==="
 echo ""
 
 # Create log dirs upfront
-mkdir -p logs/baseline logs/random_bss logs/accuracy_bss logs/bss logs/dss logs/binary_bss
+mkdir -p logs/baseline logs/random_bss logs/accuracy_bss logs/bss logs/dss logs/binary_bss logs/warning_only logs/random_binary
 
 # Helper: run an experiment only if its log.jsonl doesn't exist yet.
 # Usage: run_experiment <gpu_list> <experiment_name> [extra_args...]
@@ -139,6 +139,16 @@ run_experiment 4,5,6,7 binary_bss \
   --use_binary_syco_flags --bss_scores_path $BSS_SCORES && PIDS+=($!)
 [ ${#PIDS[@]} -gt 0 ] && wait "${PIDS[@]}"
 step_done "Batch 3"
+
+# --- Batch 4: (g) warning only + (h) random binary ---
+step_start "Batch 4: (g) warning_only + (h) random_binary"
+PIDS=()
+run_experiment 0,1,2,3 warning_only \
+  --use_warning_only && PIDS+=($!)
+run_experiment 4,5,6,7 random_binary \
+  --use_random_binary_flags && PIDS+=($!)
+[ ${#PIDS[@]} -gt 0 ] && wait "${PIDS[@]}"
+step_done "Batch 4"
 
 # --- Step 4: Evaluate all experiments ---
 step_start "Step 4: Evaluate all experiments"

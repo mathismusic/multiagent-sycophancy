@@ -106,6 +106,10 @@ def multiagent_debate(
             score_mode = "dss"
         elif getattr(args, "use_binary_syco_flags", False):
             score_mode = "binary"
+        elif getattr(args, "use_warning_only", False):
+            score_mode = "warning_only"
+        elif getattr(args, "use_random_binary_flags", False):
+            score_mode = "random_binary"
         elif args.use_bss_scores:
             score_mode = "bss"
         else:
@@ -185,7 +189,7 @@ def multiagent_debate(
             # Determine which scores (if any) to attach for logging
             scores_for_logging = None
             if (
-                (args.use_bss_scores or args.use_dss_scores or getattr(args, "use_binary_syco_flags", False))
+                (args.use_bss_scores or args.use_dss_scores or getattr(args, "use_binary_syco_flags", False) or getattr(args, "use_random_binary_flags", False))
                 and current_scores is not None
             ):
                 scores_for_logging = current_scores
@@ -257,24 +261,50 @@ def multiagent_debate(
 
             base_user = debate_state[model_name]["initial_user"]
 
-            if (
-                (args.use_bss_scores or args.use_dss_scores or getattr(args, "use_binary_syco_flags", False))
+            if getattr(args, "use_warning_only", False):
+                # Warning-only ablation: sycophancy warning but no per-model scores
+                from prompt import MMLU_DEBATE_PROMPT_USER_STANCE_WARNING_ONLY
+                debate_state[model_name]["user"] = (
+                    base_user
+                    + MMLU_DEBATE_PROMPT_USER_STANCE_WARNING_ONLY.format(
+                        other_responses_block=other_responses,
+                    )
+                )
+            elif (
+                (args.use_bss_scores or args.use_dss_scores or getattr(args, "use_binary_syco_flags", False) or getattr(args, "use_random_binary_flags", False))
                 and current_scores is not None
             ):
                 # Build lines of peer sycophancy information
                 other_scores_lines = []
-                for other_model in pipelines.keys():
-                    if other_model != model_name and other_model in current_scores:
-                        # For the binary ablation, display only relative
-                        # sycophantic / non-sycophantic labels; otherwise
-                        # show the numeric scores.
-                        if getattr(args, "use_binary_syco_flags", False):
-                            flags_by_metric = getattr(args, "binary_flags_by_metric", {})
-                            flags = flags_by_metric.get(metric, {})
+                if getattr(args, "use_binary_syco_flags", False) or getattr(args, "use_random_binary_flags", False):
+                    # Binary ablation: show sycophantic / non-sycophantic labels
+                    flags_by_metric = getattr(args, "binary_flags_by_metric", {})
+                    flags = flags_by_metric.get(metric, {})
+                    for other_model in pipelines.keys():
+                        if other_model != model_name and other_model in current_scores:
                             flag = flags.get(other_model, "non-sycophantic")
                             other_scores_lines.append(f"{other_model}: {flag}")
-                        else:
-                            other_scores_lines.append(f"{other_model}: {current_scores[other_model]:.3f}")
+                else:
+                    # Rank the OTHER models (excluding current) by their
+                    # raw scores and assign descriptive labels.
+                    peers = [
+                        (m, current_scores[m])
+                        for m in pipelines.keys()
+                        if m != model_name and m in current_scores
+                    ]
+                    peers_sorted = sorted(peers, key=lambda x: x[1])
+                    n_peers = len(peers_sorted)
+                    for rank, (m, _) in enumerate(peers_sorted):
+                        # Map rank (0-indexed) to a label across 4 buckets
+                        bucket = int(rank * 4 / n_peers) if n_peers > 0 else 0
+                        bucket = min(bucket, 3)
+                        label = [
+                            "least sycophantic",
+                            "less sycophantic",
+                            "sycophantic",
+                            "very sycophantic",
+                        ][bucket]
+                        other_scores_lines.append(f"{m}: {label}")
 
                 scores_block = "\n".join(other_scores_lines)
 
@@ -285,13 +315,13 @@ def multiagent_debate(
                 # For the binary ablation, swap in a binary-specific warning
                 # string, but keep the underlying template the same.
                 prompt_with_scores = MMLU[metric.upper()][2]
-                if getattr(args, "use_binary_syco_flags", False):
-                    from prompt import _SYCO_WARNING_GENERAL, _SYCO_WARNING_BINARY
+                if getattr(args, "use_binary_syco_flags", False) or getattr(args, "use_random_binary_flags", False):
+                    from prompt import _SYCO_WARNING_USER_STANCE, _SYCO_WARNING_GENERAL, _SYCO_WARNING_BINARY
 
-                    prompt_with_scores = prompt_with_scores.replace(
-                        _SYCO_WARNING_GENERAL,
-                        _SYCO_WARNING_BINARY,
-                    )
+                    for warning in [_SYCO_WARNING_USER_STANCE, _SYCO_WARNING_GENERAL]:
+                        if warning in prompt_with_scores:
+                            prompt_with_scores = prompt_with_scores.replace(warning, _SYCO_WARNING_BINARY)
+                            break
 
                 debate_state[model_name]["user"] = (
                     base_user
@@ -397,6 +427,18 @@ def main():
         default=False,
         help="Use binary sycophantic/non-sycophantic peer flags derived from BSS scores",
     )
+    parser.add_argument(
+        "--use_warning_only",
+        action="store_true",
+        default=False,
+        help="Show sycophancy warning text but no per-model scores/labels",
+    )
+    parser.add_argument(
+        "--use_random_binary_flags",
+        action="store_true",
+        default=False,
+        help="Use binary sycophantic/non-sycophantic labels with random assignment per sample",
+    )
 
     parser.add_argument("--bss_scores_path", type=str, default=None,
                         help="Path to BSS scores JSON")
@@ -435,9 +477,11 @@ def main():
         args.use_bss_scores,
         args.use_dss_scores,
         args.use_binary_syco_flags,
+        args.use_warning_only,
+        args.use_random_binary_flags,
     ]
     if sum(bool(f) for f in score_flags) > 1:
-        parser.error("You cannot combine --use_bss_scores, --use_dss_scores, and --use_binary_syco_flags.")
+        parser.error("Only one score mode flag can be used at a time.")
 
     device = pick_device(args.device)
     gen = GenConfig()
@@ -723,6 +767,10 @@ def main():
                     if args.use_dss_scores
                     else "binary"
                     if args.use_binary_syco_flags
+                    else "random_binary"
+                    if args.use_random_binary_flags
+                    else "warning_only"
+                    if args.use_warning_only
                     else "bss"
                     if args.use_bss_scores
                     else "none"
@@ -743,6 +791,26 @@ def main():
                 # logging; only the *display* in the prompt is binary.
                 if args.use_bss_scores or args.use_dss_scores or args.use_binary_syco_flags:
                     syco_payload = bss_scores
+                elif args.use_random_binary_flags:
+                    # Random binary: assign random sycophantic/non-sycophantic
+                    # labels per sample. Use a dummy scores dict so the debate
+                    # function enters the binary-flags code path.
+                    import random as _rng
+                    models_list = list(pipelines.keys())
+                    _rng.shuffle(models_list)
+                    k = len(models_list) // 2
+                    random_flags = {
+                        m: ("sycophantic" if i >= len(models_list) - k else "non-sycophantic")
+                        for i, m in enumerate(models_list)
+                    }
+                    if not hasattr(args, "binary_flags_by_metric"):
+                        args.binary_flags_by_metric = {}
+                    for log_m in metric_group:
+                        args.binary_flags_by_metric[log_m] = random_flags
+                    binary_flags = random_flags
+                    print(f"Random binary flags for sample {sample_idx}: {random_flags}")
+                    # Provide dummy scores so debate enters the scored path
+                    syco_payload = {m: 0.0 for m in models_list}
                 else:
                     syco_payload = None
 
@@ -814,6 +882,8 @@ def main():
                         "use_bss_scores": args.use_bss_scores,
                         "use_dss_scores": args.use_dss_scores,
                         "use_binary_syco_flags": args.use_binary_syco_flags,
+                        "use_random_binary_flags": args.use_random_binary_flags,
+                        "use_warning_only": args.use_warning_only,
                         "score_mode": score_mode,
                         "alpha": args.alpha,
                         "beta": args.beta,
