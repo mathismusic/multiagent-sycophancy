@@ -1,0 +1,9 @@
+experiment,score_mode,acc_llama3b,acc_llama8b,acc_qwen14b,acc_qwen32b,acc_qwen3b,acc_qwen7b,acc_majority
+accuracy_bss,bss,0.868,0.8147,0.9067,0.936,0.8947,0.7693,0.8907
+baseline,none,0.6547,0.612,0.868,0.8653,0.86,0.8027,0.804
+binary_bss,binary,0.8347,0.764,0.8893,0.9213,0.8867,0.8053,0.884
+bss,bss,0.8747,0.8253,0.9147,0.94,0.904,0.8013,0.9093
+dss,dss,0.8747,0.832,0.9093,0.9427,0.8933,0.7987,0.904
+random_binary,random_binary,0.7947,0.7387,0.8867,0.9133,0.8813,0.8027,0.8627
+random_bss,bss,0.8333,0.8293,0.9093,0.932,0.8933,0.788,0.8853
+warning_only,warning_only,0.6547,0.612,0.868,0.8653,0.86,0.8027,0.804

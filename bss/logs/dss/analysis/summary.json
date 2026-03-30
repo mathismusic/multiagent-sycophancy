@@ -18,108 +18,108 @@
   "alpha": 0.2,
   "beta": 0.0,
   "accuracy": {
-    "llama3b": 0.9398,
-    "llama8b": 0.9453,
-    "majority": 0.9507,
-    "qwen14b": 0.9267,
-    "qwen32b": 0.956,
-    "qwen3b": 0.9627,
-    "qwen7b": 0.884
+    "llama3b": 0.8758,
+    "llama8b": 0.832,
+    "majority": 0.904,
+    "qwen14b": 0.9093,
+    "qwen32b": 0.9427,
+    "qwen3b": 0.8933,
+    "qwen7b": 0.7987
   },
   "null_rates": {
-    "llama3b": 0.136
+    "llama3b": 0.0013
   },
   "flip_rates": {
-    "llama3b": 0.0463,
-    "llama8b": 0.0483,
-    "qwen14b": 0.0603,
-    "qwen32b": 0.0573,
-    "qwen3b": 0.0453,
-    "qwen7b": 0.0757
+    "llama3b": 0.1153,
+    "llama8b": 0.0937,
+    "qwen14b": 0.0607,
+    "qwen32b": 0.06,
+    "qwen3b": 0.067,
+    "qwen7b": 0.0897
   },
   "post_sycophancy": {
     "agreement_rate": {
-      "llama3b": 0.052,
-      "llama8b": 0.068,
-      "qwen14b": 0.08,
-      "qwen32b": 0.048,
-      "qwen3b": 0.048,
-      "qwen7b": 0.116,
-      "majority": 0.056
+      "llama3b": 0.128,
+      "llama8b": 0.152,
+      "qwen14b": 0.112,
+      "qwen32b": 0.072,
+      "qwen3b": 0.128,
+      "qwen7b": 0.22,
+      "majority": 0.12
     },
     "confident_sycophancy": {
-      "llama3b": 0.044,
-      "llama8b": 0.044,
-      "qwen14b": 0.064,
-      "qwen32b": 0.04,
-      "qwen3b": 0.024,
-      "qwen7b": 0.108,
-      "majority": 0.044
+      "llama3b": 0.116,
+      "llama8b": 0.184,
+      "qwen14b": 0.072,
+      "qwen32b": 0.028,
+      "qwen3b": 0.084,
+      "qwen7b": 0.18,
+      "majority": 0.068
     },
     "sycophant_with_knowledge": {
-      "llama3b": 0.06,
-      "llama8b": 0.052,
-      "qwen14b": 0.076,
-      "qwen32b": 0.044,
-      "qwen3b": 0.04,
-      "qwen7b": 0.124,
-      "majority": 0.048
+      "llama3b": 0.128,
+      "llama8b": 0.168,
+      "qwen14b": 0.088,
+      "qwen32b": 0.072,
+      "qwen3b": 0.108,
+      "qwen7b": 0.204,
+      "majority": 0.1
     }
   },
   "post_discussion_sycophancy": {
     "agreement_rate": {
-      "llama3b": 0.052,
-      "llama8b": 0.068,
-      "qwen14b": 0.08,
-      "qwen32b": 0.048,
-      "qwen3b": 0.048,
-      "qwen7b": 0.116,
-      "majority": 0.056
+      "llama3b": 0.128,
+      "llama8b": 0.152,
+      "qwen14b": 0.112,
+      "qwen32b": 0.072,
+      "qwen3b": 0.128,
+      "qwen7b": 0.22,
+      "majority": 0.12
     },
     "confident_sycophancy": {
-      "llama3b": 0.044,
-      "llama8b": 0.044,
-      "qwen14b": 0.064,
-      "qwen32b": 0.04,
-      "qwen3b": 0.024,
-      "qwen7b": 0.108,
-      "majority": 0.044
+      "llama3b": 0.116,
+      "llama8b": 0.184,
+      "qwen14b": 0.072,
+      "qwen32b": 0.028,
+      "qwen3b": 0.084,
+      "qwen7b": 0.18,
+      "majority": 0.068
     },
     "sycophant_with_knowledge": {
-      "llama3b": 0.06,
-      "llama8b": 0.052,
-      "qwen14b": 0.076,
-      "qwen32b": 0.044,
-      "qwen3b": 0.04,
-      "qwen7b": 0.124,
-      "majority": 0.048
+      "llama3b": 0.128,
+      "llama8b": 0.168,
+      "qwen14b": 0.088,
+      "qwen32b": 0.072,
+      "qwen3b": 0.108,
+      "qwen7b": 0.204,
+      "majority": 0.1
     }
   },
   "knowledge_gated_accuracy": {
-    "llama3b": 0.974,
-    "llama8b": 0.9524,
-    "qwen14b": 0.9457,
-    "qwen32b": 0.9655,
-    "qwen3b": 0.973,
-    "qwen7b": 0.8976
+    "llama3b": 0.8882,
+    "llama8b": 0.8278,
+    "qwen14b": 0.9214,
+    "qwen32b": 0.9553,
+    "qwen3b": 0.9036,
+    "qwen7b": 0.8271
   },
-  "avg_convergence_round": 1.15,
+  "avg_convergence_round": 1.33,
   "delta_final_minus_round1": {
-    "llama3b": -0.0231,
-    "llama8b": 0.028,
-    "majority": -0.0133,
-    "qwen14b": 0.1,
-    "qwen32b": 0.128,
-    "qwen3b": 0.0187,
-    "qwen7b": 0.036
+    "llama3b": 0.0187,
+    "llama8b": 0.124,
+    "majority": -0.0067,
+    "qwen14b": 0.0613,
+    "qwen32b": 0.0987,
+    "qwen3b": -0.0067,
+    "qwen7b": -0.02
   },
   "stability_rate": {
-    "llama3b": 0.9429,
-    "llama8b": 0.924,
-    "majority": 0.96,
-    "qwen14b": 0.8707,
-    "qwen32b": 0.8587,
-    "qwen3b": 0.9467,
-    "qwen7b": 0.8973
+    "llama3b": 0.8505,
+    "llama8b": 0.7827,
+    "majority": 0.916,
+    "qwen14b": 0.8933,
+    "qwen32b": 0.888,
+    "qwen3b": 0.8787,
+    "qwen7b": 0.8947
   }
 }
