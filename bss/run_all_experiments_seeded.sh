@@ -1,18 +1,22 @@
 #!/bin/bash
 #
-# Run all 6 experiments: (a)-(f), two at a time on separate GPU sets.
+# Run 8 experiments (all except warning_only) with a configurable seed.
+# Results saved to logs_seed${SEED}/
 #
 # GPU allocation:
 #   GPUs 0-3 (4x A6000, 192GB) — odd jobs
 #   GPUs 4-7 (4x A40, 184GB)   — even jobs
 #
 # Usage:
-#   bash run_all_experiments.sh
+#   bash run_all_experiments_seeded.sh <seed>
+#   bash run_all_experiments_seeded.sh 123
 
 set -e
 
+SEED="${1:?Usage: $0 <seed>}"
+LOGDIR="logs_seed${SEED}"
+
 MODELS="llama3b llama8b qwen3b qwen7b qwen14b qwen32b"
-BSS_DATA_CSV="data_for_bss.csv"
 DSS_DATA_CSV="data_for_dss.csv"
 BSS_SCORES="bss_scores_final.json"
 RANDOM_SCORES="random_scores.json"
@@ -44,59 +48,20 @@ step_done() {
   echo "[$(date '+%H:%M:%S')] $1 finished in $(elapsed $dur)  (total elapsed: $(elapsed $total))"
 }
 
-echo "=== End-to-end pipeline ==="
+echo "=== Seeded pipeline (seed=$SEED) ==="
 echo "Started at $(date)"
-echo ""
-
-mkdir -p logs
-
-# --- Step 0a: Generate datasets (if not already present) ---
-step_start "Step 0a: Generate datasets"
-if [ ! -f "$BSS_DATA_CSV" ] || [ ! -f "$DSS_DATA_CSV" ]; then
-  python generate_bss_dss_data.py \
-    --bss_per_subject 50 --dss_per_subject 50 \
-    --bss_out $BSS_DATA_CSV --dss_out $DSS_DATA_CSV
-  step_done "Step 0a"
-else
-  echo "  $BSS_DATA_CSV and $DSS_DATA_CSV already exist, skipping."
-fi
-
-# --- Step 0b: Compute BSS scores (if not already present) ---
-step_start "Step 0b: Compute BSS scores (sequential, one model at a time)"
-if [ ! -f "$BSS_SCORES" ]; then
-  python bss_calc.py --data_csv $BSS_DATA_CSV \
-    > logs/bss_calc_stdout.log 2>&1
-  mv bss_scores_only.json $BSS_SCORES
-  step_done "Step 0b"
-else
-  echo "  $BSS_SCORES already exists, skipping."
-fi
-
-# --- Step 0c: Pre-compute knowledge flags ---
-step_start "Step 0c: Compute knowledge flags"
-if [ ! -f "$KNOWLEDGE_FLAGS" ]; then
-  python compute_knowledge_flags.py \
-    --data_csv $DSS_DATA_CSV \
-    -m $MODELS \
-    -o $KNOWLEDGE_FLAGS
-  step_done "Step 0c"
-else
-  echo "  $KNOWLEDGE_FLAGS already exists, skipping."
-fi
-
-echo ""
-echo "=== Starting discussion experiments ==="
+echo "Logs: $LOGDIR/"
 echo ""
 
 # Create log dirs upfront
-mkdir -p logs/baseline logs/random_bss logs/accuracy_bss logs/bss logs/dss logs/binary_bss logs/warning_only logs/random_binary logs/dbss
+mkdir -p $LOGDIR/{baseline,bss,accuracy_bss,random_bss,dss,binary_bss,random_binary,dbss}
 
 # Helper: run an experiment only if its log.jsonl doesn't exist yet.
 # Usage: run_experiment <gpu_list> <experiment_name> [extra_args...]
 run_experiment() {
   local gpus="$1"; shift
   local exp="$1"; shift
-  if [ -f "logs/$exp/log.jsonl" ]; then
+  if [ -f "$LOGDIR/$exp/log.jsonl" ]; then
     echo "  ($exp) already complete, skipping."
     return 1  # signal: nothing launched
   fi
@@ -105,13 +70,15 @@ run_experiment() {
     -m $MODELS \
     --data_csv $DSS_DATA_CSV \
     --knowledge_flags_path $KNOWLEDGE_FLAGS \
+    --seed $SEED \
+    --log_dir $LOGDIR \
     "$@" \
-    > "logs/$exp/stdout.log" 2>&1 &
-  echo "  ($exp) PID=$!  [GPUs $gpus]"
+    > "$LOGDIR/$exp/stdout.log" 2>&1 &
+  echo "  ($exp) PID=$!  [GPUs $gpus]  seed=$SEED"
   return 0
 }
 
-# --- Batch 1: (a) baseline + (b) actual bss ---
+# --- Batch 1: (a) baseline + (b) bss ---
 step_start "Batch 1: (a) baseline + (b) bss"
 PIDS=()
 run_experiment 0,1,2,3 baseline && PIDS+=($!)
@@ -141,37 +108,31 @@ run_experiment 4,5,6,7 binary_bss \
 [ ${#PIDS[@]} -gt 0 ] && wait "${PIDS[@]}"
 step_done "Batch 3"
 
-# --- Batch 4: (g) warning only + (h) random binary ---
-step_start "Batch 4: (g) warning_only + (h) random_binary"
+# --- Batch 4: (g) random binary + (h) dbss ---
+step_start "Batch 4: (g) random_binary + (h) dbss"
 PIDS=()
-run_experiment 0,1,2,3 warning_only \
-  --use_warning_only && PIDS+=($!)
-run_experiment 4,5,6,7 random_binary \
+run_experiment 0,1,2,3 random_binary \
   --use_random_binary_flags && PIDS+=($!)
+run_experiment 4,5,6,7 dbss \
+  --use_bss_scores --bss_scores_path $DBSS_SCORES && PIDS+=($!)
 [ ${#PIDS[@]} -gt 0 ] && wait "${PIDS[@]}"
 step_done "Batch 4"
 
-# --- Batch 5: (i) dbss (post-debate scores as BSS) ---
-step_start "Batch 5: (i) dbss"
-PIDS=()
-run_experiment 0,1,2,3 dbss \
-  --use_bss_scores --bss_scores_path $DBSS_SCORES && PIDS+=($!)
-[ ${#PIDS[@]} -gt 0 ] && wait "${PIDS[@]}"
-step_done "Batch 5"
-
-# --- Step 4: Evaluate all experiments ---
-step_start "Step 4: Evaluate all experiments"
-python evaluate.py --all
-step_done "Step 4"
+# --- Evaluate all experiments ---
+step_start "Evaluate all experiments"
+for exp in baseline bss accuracy_bss random_bss dss binary_bss random_binary dbss; do
+  python evaluate.py -e "$exp" --log_dir $LOGDIR
+done
+step_done "Evaluate"
 
 # --- Final summary ---
 TOTAL=$((SECONDS - PIPELINE_START))
 echo ""
 echo "════════════════════════════════════════════════"
 echo "  Pipeline complete at $(date)"
+echo "  Seed: $SEED"
 echo "  Total wall time: $(elapsed $TOTAL)"
 echo "════════════════════════════════════════════════"
 echo ""
-echo "Logs:        logs/<experiment>/log.jsonl"
-echo "Evaluations: logs/<experiment>/eval/"
-echo "Comparison:  logs/comparison.csv"
+echo "Logs:        $LOGDIR/<experiment>/log.jsonl"
+echo "Evaluations: $LOGDIR/<experiment>/eval/"

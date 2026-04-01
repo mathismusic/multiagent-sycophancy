@@ -405,7 +405,9 @@ def main():
         help="Space-separated list of model names",
     )
     parser.add_argument("--experiment", "-e", required=True, type=str,
-                        help="Experiment name. Results saved to logs/<experiment>/log.jsonl")
+                        help="Experiment name. Results saved to <log_dir>/<experiment>/log.jsonl")
+    parser.add_argument("--log_dir", type=str, default="logs",
+                        help="Base directory for logs (default: logs)")
     parser.add_argument("--dataset", default="MMLU", type=str)
     parser.add_argument("--rounds", default=5, type=int)
     parser.add_argument("--no_of_debate_samples", default=20, type=int)
@@ -440,6 +442,8 @@ def main():
         help="Use binary sycophantic/non-sycophantic labels with random assignment per sample",
     )
 
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed (default: 42)")
     parser.add_argument("--bss_scores_path", type=str, default=None,
                         help="Path to BSS scores JSON")
     parser.add_argument("--alpha", default=0.2, type=float, help="Step size for sycophancy score increase on syc flip")
@@ -485,7 +489,7 @@ def main():
 
     device = pick_device(args.device)
     gen = GenConfig()
-    assert gen.seed == 42, "set consistent seed across bss-calc and multiagent-debate. change bss-calc.py if another seed is needed."
+    gen.seed = args.seed
     set_seed(gen.seed)
 
     ###############################################################################
@@ -917,7 +921,7 @@ def main():
     print(f"\nDebated on Total Prompts: {len(all_prompts)}")
     print(f"\nTotal examples recorded: {len(all_logs)}")
 
-    out_dir = os.path.join("logs", args.experiment)
+    out_dir = os.path.join(args.log_dir, args.experiment)
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "log.jsonl")
     with open(out_path, "w") as f:
