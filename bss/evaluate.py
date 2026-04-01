@@ -34,8 +34,8 @@ CORRECT_ANSWER = "incorrect"
 SYCOPHANTIC_ANSWER = "correct"
 
 
-def load_log(experiment):
-    path = os.path.join("logs", experiment, "log.jsonl")
+def load_log(experiment, log_dir="logs"):
+    path = os.path.join(log_dir, experiment, "log.jsonl")
     records = []
     with open(path, "r") as f:
         for line in f:
@@ -463,17 +463,17 @@ def build_summary(records, accuracy_df, flip_df, sycophancy_df):
 # Main
 # =============================================================================
 
-def evaluate_experiment(experiment):
+def evaluate_experiment(experiment, log_dir="logs"):
     print(f"\n{'='*60}")
     print(f"Evaluating: {experiment}")
     print(f"{'='*60}")
 
-    records = load_log(experiment)
+    records = load_log(experiment, log_dir=log_dir)
     if not records:
         print("No records found, skipping.")
         return
 
-    out_dir = os.path.join("logs", experiment, "eval")
+    out_dir = os.path.join(log_dir, experiment, "eval")
     os.makedirs(out_dir, exist_ok=True)
 
     # 1. Final accuracy
@@ -533,22 +533,26 @@ def main():
     parser.add_argument("--experiment", "-e", type=str,
                         help="Experiment name to evaluate")
     parser.add_argument("--all", action="store_true",
-                        help="Evaluate all experiments in logs/")
+                        help="Evaluate all experiments in log_dir/")
+    parser.add_argument("--log_dir", type=str, default="logs",
+                        help="Base directory for logs (default: logs)")
     args = parser.parse_args()
 
+    log_dir = args.log_dir
+
     if args.all:
-        if not os.path.isdir("logs"):
-            print("No logs/ directory found.")
+        if not os.path.isdir(log_dir):
+            print(f"No {log_dir}/ directory found.")
             return
-        experiments = sorted(d for d in os.listdir("logs")
-                            if os.path.isfile(os.path.join("logs", d, "log.jsonl")))
+        experiments = sorted(d for d in os.listdir(log_dir)
+                            if os.path.isfile(os.path.join(log_dir, d, "log.jsonl")))
         if not experiments:
-            print("No experiments found in logs/")
+            print(f"No experiments found in {log_dir}/")
             return
         print(f"Found {len(experiments)} experiments: {experiments}")
         summaries = {}
         for exp in experiments:
-            summaries[exp] = evaluate_experiment(exp)
+            summaries[exp] = evaluate_experiment(exp, log_dir=log_dir)
 
         # Cross-experiment comparison
         print(f"\n{'='*60}")
@@ -565,10 +569,10 @@ def main():
         if rows:
             comp_df = pd.DataFrame(rows)
             print(comp_df.to_string(index=False))
-            comp_df.to_csv("logs/comparison.csv", index=False)
-            print("\nSaved to logs/comparison.csv")
+            comp_df.to_csv(os.path.join(log_dir, "comparison.csv"), index=False)
+            print(f"\nSaved to {log_dir}/comparison.csv")
     elif args.experiment:
-        evaluate_experiment(args.experiment)
+        evaluate_experiment(args.experiment, log_dir=log_dir)
     else:
         parser.error("Provide --experiment or --all")
 
